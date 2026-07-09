@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Erizos</title>
+<style>
+  body {
+    margin: 0;
+    background: #000;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-family: 'Courier New', monospace;
+  }
+
+  .contenedor {
+    text-align: center;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 6vw, 4rem);
+    color: #0ff;
+    text-shadow:
+      0 0 5px #0ff,
+      0 0 15px #0ff,
+      0 0 30px #0ff;
+    margin: 0.3em 0;
+    cursor: pointer;
+    letter-spacing: 2px;
+    position: relative;
+    user-select: none;
+    transition: transform 0.1s;
+  }
+
+  h1.pink {
+    color: #ff00c8;
+    text-shadow:
+      0 0 5px #ff00c8,
+      0 0 15px #ff00c8,
+      0 0 30px #ff00c8;
+  }
+
+  h1.glitch {
+    animation: glitchAnim 0.3s linear;
+  }
+
+  h1.glitch::before,
+  h1.glitch::after {
+    content: attr(data-text);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    overflow: hidden;
+    clip-path: inset(0 0 0 0);
+  }
+
+  h1.glitch::before {
+    color: #ff00c8;
+    animation: glitchTop 0.3s linear;
+  }
+
+  h1.glitch::after {
+    color: #0ff;
+    animation: glitchBottom 0.3s linear;
+  }
+
+  @keyframes glitchAnim {
+    0%   { transform: translate(0, 0); }
+    20%  { transform: translate(-4px, 2px); }
+    40%  { transform: translate(4px, -2px); }
+    60%  { transform: translate(-3px, -1px); }
+    80%  { transform: translate(3px, 1px); }
+    100% { transform: translate(0, 0); }
+  }
+
+  @keyframes glitchTop {
+    0%   { clip-path: inset(0 0 90% 0); transform: translate(0,0); }
+    20%  { clip-path: inset(10% 0 70% 0); transform: translate(-5px,-2px); }
+    40%  { clip-path: inset(40% 0 40% 0); transform: translate(5px,2px); }
+    60%  { clip-path: inset(70% 0 10% 0); transform: translate(-3px,1px); }
+    80%  { clip-path: inset(20% 0 60% 0); transform: translate(3px,-1px); }
+    100% { clip-path: inset(0 0 90% 0); transform: translate(0,0); }
+  }
+
+  @keyframes glitchBottom {
+    0%   { clip-path: inset(90% 0 0 0); transform: translate(0,0); }
+    20%  { clip-path: inset(70% 0 10% 0); transform: translate(5px,2px); }
+    40%  { clip-path: inset(40% 0 40% 0); transform: translate(-5px,-2px); }
+    60%  { clip-path: inset(10% 0 70% 0); transform: translate(3px,-1px); }
+    80%  { clip-path: inset(60% 0 20% 0); transform: translate(-3px,1px); }
+    100% { clip-path: inset(90% 0 0 0); transform: translate(0,0); }
+  }
+
+  .chispa {
+    position: fixed;
+    pointer-events: none;
+    font-size: 1.2rem;
+    font-weight: bold;
+    opacity: 1;
+    animation: subir 0.8s ease-out forwards;
+  }
+
+  @keyframes subir {
+    0%   { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-60px) scale(1.5); opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="contenedor">
+  <h1 class="cyan" data-text="En un mundo de tibios....">En un mundo de tibios....</h1>
+  <h1 class="pink" data-text="Estamos erizos....">Estamos erizos....</h1>
+</div>
+
+<script>
+  const titulos = document.querySelectorAll('h1');
+  const simbolos = ['#', '%', '&', '/', '0', '1', 'x', '*', '¡', '!'];
+
+  function activarGlitch(el) {
+    el.classList.remove('glitch');
+    void el.offsetWidth;
+    el.classList.add('glitch');
+    setTimeout(() => el.classList.remove('glitch'), 300);
+  }
+
+  function crearChispas(x, y) {
+    for (let i = 0; i < 6; i++) {
+      const chispa = document.createElement('span');
+      chispa.className = 'chispa';
+      chispa.textContent = simbolos[Math.floor(Math.random() * simbolos.length)];
+      chispa.style.left = (x + (Math.random() * 60 - 30)) + 'px';
+      chispa.style.top = (y + (Math.random() * 20 - 10)) + 'px';
+      chispa.style.color = Math.random() > 0.5 ? '#0ff' : '#ff00c8';
+      document.body.appendChild(chispa);
+      setTimeout(() => chispa.remove(), 800);
+    }
+  }
+
+  titulos.forEach(el => {
+    const disparar = (e) => {
+      activarGlitch(el);
+      const x = e.touches ? e.touches[0].clientX : e.clientX;
+      const y = e.touches ? e.touches[0].clientY : e.clientY;
+      crearChispas(x, y);
+    };
+    el.addEventListener('click', disparar);
+    el.addEventListener('touchstart', disparar);
+  });
+</script>
+
+</body>
+</html>
