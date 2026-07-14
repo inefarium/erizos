@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title><-INEFAIRUM-></title>
+<title><-INEFARIUM-></title>
 <style>
   body {
     margin: 0;
@@ -123,6 +123,66 @@
   const titulos = document.querySelectorAll('h1');
   const simbolos = ['#', '%', '&', '/', '0', '1', 'x', '*', '¡', '!'];
 
+  // ---- AUDIO: sonido cyberpunk sintetizado (sin archivos externos) ----
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  // pitch: 'alto' (cyan) o 'bajo' (pink) para diferenciar el timbre
+  function sonarCyberpunk(pitch) {
+    const ctx = getAudioCtx();
+    const ahora = ctx.currentTime;
+    const master = ctx.createGain();
+    master.gain.value = 0.16; // volumen suave, atmosférico
+    master.connect(ctx.destination);
+
+    // Eco tenue para dar sensación de espacio (reverbero simple con delay + feedback)
+    const eco = ctx.createDelay();
+    eco.delayTime.value = 0.32;
+    const ecoFeedback = ctx.createGain();
+    ecoFeedback.gain.value = 0.35;
+    const ecoFiltro = ctx.createBiquadFilter();
+    ecoFiltro.type = 'lowpass';
+    ecoFiltro.frequency.value = 1800;
+
+    master.connect(eco);
+    eco.connect(ecoFiltro);
+    ecoFiltro.connect(ecoFeedback);
+    ecoFeedback.connect(eco);
+    eco.connect(ctx.destination);
+
+    // Pad etéreo: dos osciladores suaves formando un intervalo de quinta
+    const base = pitch === 'alto' ? 660 : 330;
+    [1, 1.5].forEach((mult, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = i === 0 ? 'sine' : 'triangle';
+      osc.frequency.value = base * mult;
+
+      const filtro = ctx.createBiquadFilter();
+      filtro.type = 'lowpass';
+      filtro.frequency.setValueAtTime(2200, ahora);
+      filtro.frequency.exponentialRampToValueAtTime(500, ahora + 1.1);
+
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, ahora);
+      env.gain.linearRampToValueAtTime(i === 0 ? 0.35 : 0.18, ahora + 0.08); // ataque suave
+      env.gain.exponentialRampToValueAtTime(0.001, ahora + 1.2); // caída larga
+
+      osc.connect(filtro);
+      filtro.connect(env);
+      env.connect(master);
+
+      osc.start(ahora);
+      osc.stop(ahora + 1.2);
+    });
+  }
+  // ---- FIN AUDIO ----
+
   function activarGlitch(el) {
     el.classList.remove('glitch');
     void el.offsetWidth;
@@ -144,8 +204,10 @@
   }
 
   titulos.forEach(el => {
+    const esCyan = el.classList.contains('cyan');
     const disparar = (e) => {
       activarGlitch(el);
+      sonarCyberpunk(esCyan ? 'alto' : 'bajo');
       const x = e.touches ? e.touches[0].clientX : e.clientX;
       const y = e.touches ? e.touches[0].clientY : e.clientY;
       crearChispas(x, y);
