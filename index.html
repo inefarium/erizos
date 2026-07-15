@@ -51,11 +51,11 @@
     left: 0; top: 0; width: 100%; height: 100%;
     background: #000;
     overflow: hidden;
-    clip-path: inset(0 0 0 0);
+    clip-path: inset(0 0 90% 0);
   }
 
-  h1.glitch::before { color: #ff00c8; animation: glitchTop 0.3s linear; }
-  h1.glitch::after  { color: #0ff;   animation: glitchBottom 0.3s linear; }
+  h1.glitch::before { color: #ff00c8; clip-path: inset(0 0 90% 0); animation: glitchTop 0.3s linear; }
+  h1.glitch::after  { color: #0ff;   clip-path: inset(90% 0 0 0); animation: glitchBottom 0.3s linear; }
 
   @keyframes glitchAnim {
     0%   { transform: translate(0, 0); }
@@ -273,9 +273,17 @@
     }
   }
 
+  // Evita que un titulo dispare el efecto dos veces (touchstart + click sintetico en movil)
+  const yaDisparando = new WeakSet();
+
   titulos.forEach(el => {
     const esCyan = el.classList.contains('cyan');
     const disparar = (e) => {
+      if (e.type === 'touchstart') e.preventDefault();
+      if (yaDisparando.has(el)) return;
+      yaDisparando.add(el);
+      setTimeout(() => yaDisparando.delete(el), 350);
+
       activarGlitch(el);
       sonarCyberpunk(esCyan ? 'alto' : 'bajo');
       const x = e.touches ? e.touches[0].clientX : e.clientX;
@@ -283,20 +291,30 @@
       crearChispas(x, y);
     };
     el.addEventListener('click', disparar);
-    el.addEventListener('touchstart', disparar);
+    el.addEventListener('touchstart', disparar, { passive: false });
   });
 
   // ===================== CORAZON 3D (Three.js) =====================
   // --- Lista de frases cortas: agrega, quita o edita libremente las que quieras ---
   const FRASES_CORAZON = [
+    "Te Amo mi Joy",
     "Siempre quiero estar contigo en Inefarium",
-    "Conexión establecida de erizos",
-    "Un pulso etereo de conexion lunar",
-    "Corazones de erizos",
+    "Conexión establecida de Eizos",
+    "Muack Muack Muack",
+    "Un pulso Etereo de conexion Lunar",
+    "Corazones de erizos? siii",
     "Frecuencia encontrada en Liminal",
-    "Aquí, cerca, contigo",
-    "Me tienes, pase lo que pase"
-    
+    "Aquí.. cerca.. contigo..",
+    "Me tienes, pase lo que pase",
+    "Erizadas a esta hora?? Si quiero jsdfjdh"
+    "En medio del ruido, tu señal es mi guia",
+    "Mantiendome en loop: pensando en ti",
+    "Tu presencia, la única que no lagea mi ser",
+    "Sincronizados, aunque el mundo falle",
+    "Eres el dato que nunca quiero corromper",
+    "Mi neón de Arkimera favorito eres tu",
+    "Te lanzo un Ñacaryz :3",
+    "T---E A---M---O"
   ];
 
   // --- Parametros del corazon: cambia estos numeros para afinar el look ---
@@ -305,6 +323,9 @@
     segmentosContorno: 20,  // puntos alrededor del contorno del corazon (menos = huecos mas visibles)
     segmentosProfundidad: 15, // anillos de "puffing" de atras hacia adelante
     profundidad: 0.4,       // que tan inflado/3D se ve (0 = plano, 1 = muy inflado)
+    escalaCorazon: 1.15,    // tamano del corazon dentro de la escena (ajustado para que quepa junto al anillo)
+    radioAnillo: 1.2,       // radio del anillo tipo Saturno (ajustado para que no se corte)
+    grosorAnillo: 0.014,    // grosor del tubo del anillo
     velocidadGiro: 0.006,   // velocidad de rotacion del corazon
     velocidadAnillo: 0.018  // velocidad de rotacion del anillo tipo Saturno
   };
@@ -366,8 +387,10 @@
     const canvas = document.getElementById('canvasCorazon');
     escena = new THREE.Scene();
 
+    // Camara alejada lo suficiente para que el anillo (el elemento mas ancho)
+    // quepa completo dentro del encuadre sin cortarse en los bordes.
     camara = new THREE.PerspectiveCamera(38, 1, 0.1, 10);
-    camara.position.set(0, 0, 3.1);
+    camara.position.set(0, 0, 3.9);
     camara.lookAt(0, 0, 0);
 
     renderizador = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
@@ -396,11 +419,11 @@
     grupoCorazon = new THREE.Group();
     grupoCorazon.add(mallaRelleno);
     grupoCorazon.add(mallaCorazon);
-    grupoCorazon.scale.set(1.05, 1.05, 1.05);
+    grupoCorazon.scale.set(CONFIG_CORAZON.escalaCorazon, CONFIG_CORAZON.escalaCorazon, CONFIG_CORAZON.escalaCorazon);
     escena.add(grupoCorazon);
 
     // --- Anillo tipo Saturno alrededor del corazon ---
-    const geometriaAnillo = new THREE.TorusGeometry(1.28, 0.012, 8, 90);
+    const geometriaAnillo = new THREE.TorusGeometry(CONFIG_CORAZON.radioAnillo, CONFIG_CORAZON.grosorAnillo, 8, 100);
     const materialAnillo = new THREE.MeshBasicMaterial({
       color: CONFIG_CORAZON.color,
       transparent: true,
@@ -455,18 +478,21 @@
   }
   crearEstrellas();
 
-  // --- Posicionamiento aleatorio de toda la escena ---
+  // --- Posicionamiento aleatorio de toda la escena (siempre dentro de la pantalla) ---
   const escenaCorazon = document.getElementById('escenaCorazon');
   const corazon = document.getElementById('corazon');
 
   function posicionarCorazonAleatorio() {
     const tam = escenaCorazon.offsetWidth || 170;
-    const maxX = Math.max(window.innerWidth - tam, 0);
-    const maxY = Math.max(window.innerHeight - tam, 0);
-    const x = Math.random() * maxX;
-    const y = Math.random() * maxY;
-    escenaCorazon.style.left = x + 'px';
-    escenaCorazon.style.top = y + 'px';
+    // Se deja un margen extra porque el "latido" escala la escena hasta 1.06x
+    // al centro; sin este margen podia asomarse fuera de la pantalla.
+    const margenLatido = tam * 0.08;
+    const maxX = Math.max(window.innerWidth - tam - margenLatido, margenLatido);
+    const maxY = Math.max(window.innerHeight - tam - margenLatido, margenLatido);
+    const x = margenLatido / 2 + Math.random() * (maxX - margenLatido / 2);
+    const y = margenLatido / 2 + Math.random() * (maxY - margenLatido / 2);
+    escenaCorazon.style.left = Math.max(x, 0) + 'px';
+    escenaCorazon.style.top = Math.max(y, 0) + 'px';
   }
 
   function mostrarMensajeCorazon(x, y) {
@@ -474,9 +500,22 @@
     const msg = document.createElement('div');
     msg.className = 'mensaje-flotante';
     msg.textContent = frase;
-    msg.style.left = Math.min(Math.max(x, 60), window.innerWidth - 60) + 'px';
-    msg.style.top = Math.max(y, 40) + 'px';
+    msg.style.left = x + 'px';
+    msg.style.top = y + 'px';
     document.body.appendChild(msg);
+
+    // Medir el tamano real del mensaje y reubicarlo si se sale de la pantalla
+    const margen = 12;
+    const rect = msg.getBoundingClientRect();
+    const mitadAncho = rect.width / 2;
+    let left = x;
+    let top = y;
+    if (left - mitadAncho < margen) left = mitadAncho + margen;
+    if (left + mitadAncho > window.innerWidth - margen) left = window.innerWidth - margen - mitadAncho;
+    if (top - rect.height < margen) top = rect.height + margen;
+    if (top > window.innerHeight - margen) top = window.innerHeight - margen;
+    msg.style.left = left + 'px';
+    msg.style.top = top + 'px';
 
     requestAnimationFrame(() => msg.classList.add('mostrar'));
 
@@ -486,8 +525,14 @@
     }, 1800);
   }
 
+  let yaDisparandoCorazon = false;
   function manejarClickCorazon(e) {
     e.stopPropagation();
+    if (e.type === 'touchstart') e.preventDefault();
+    if (yaDisparandoCorazon) return;
+    yaDisparandoCorazon = true;
+    setTimeout(() => { yaDisparandoCorazon = false; }, 600);
+
     const x = e.touches ? e.touches[0].clientX : e.clientX;
     const y = e.touches ? e.touches[0].clientY : e.clientY;
 
@@ -504,7 +549,7 @@
   }
 
   corazon.addEventListener('click', manejarClickCorazon);
-  corazon.addEventListener('touchstart', manejarClickCorazon);
+  corazon.addEventListener('touchstart', manejarClickCorazon, { passive: false });
 
   posicionarCorazonAleatorio();
 </script>
