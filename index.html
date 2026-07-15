@@ -43,32 +43,19 @@
       0 0 30px #ff00c8;
   }
 
-  h1.glitch {
-    animation: glitchAnim 0.3s linear;
-  }
+  h1.glitch { animation: glitchAnim 0.3s linear; }
 
-  h1.glitch::before,
-  h1.glitch::after {
+  h1.glitch::before, h1.glitch::after {
     content: attr(data-text);
     position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
+    left: 0; top: 0; width: 100%; height: 100%;
     background: #000;
     overflow: hidden;
     clip-path: inset(0 0 0 0);
   }
 
-  h1.glitch::before {
-    color: #ff00c8;
-    animation: glitchTop 0.3s linear;
-  }
-
-  h1.glitch::after {
-    color: #0ff;
-    animation: glitchBottom 0.3s linear;
-  }
+  h1.glitch::before { color: #ff00c8; animation: glitchTop 0.3s linear; }
+  h1.glitch::after  { color: #0ff;   animation: glitchBottom 0.3s linear; }
 
   @keyframes glitchAnim {
     0%   { transform: translate(0, 0); }
@@ -104,11 +91,91 @@
     font-weight: bold;
     opacity: 1;
     animation: subir 0.8s ease-out forwards;
+    z-index: 30;
   }
 
   @keyframes subir {
     0%   { transform: translateY(0) scale(1); opacity: 1; }
     100% { transform: translateY(-60px) scale(1.5); opacity: 0; }
+  }
+
+  /* ===================== ESCENA DEL CORAZON 3D ===================== */
+  .escena-corazon {
+    position: fixed;
+    width: clamp(130px, 20vw, 230px);
+    height: clamp(130px, 20vw, 230px);
+    z-index: 15;
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .escena-corazon.oculto {
+    opacity: 0;
+    transform: scale(0.6);
+    pointer-events: none;
+  }
+
+  .estrella {
+    position: absolute;
+    color: #ff00c8;
+    text-shadow: 0 0 4px #ff00c8, 0 0 10px #ff00c8;
+    font-size: 1rem;
+    pointer-events: none;
+    animation: titilar 1.6s ease-in-out infinite;
+  }
+
+  @keyframes titilar {
+    0%, 100% { opacity: 0.25; transform: scale(0.7) rotate(0deg); }
+    50%      { opacity: 1;    transform: scale(1.15) rotate(8deg); }
+  }
+
+  .corazon-flotante {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+    z-index: 2;
+    filter: drop-shadow(0 0 1.5px #ff00c8) drop-shadow(0 0 5px #ff00c8);
+    animation: latido 1.8s ease-in-out infinite;
+  }
+
+  @keyframes latido {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.06); }
+  }
+
+  #canvasCorazon {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* ===================== MENSAJE FLOTANTE ===================== */
+  .mensaje-flotante {
+    position: fixed;
+    transform: translate(-50%, -100%);
+    background: rgba(0, 0, 0, 0.75);
+    border: 1px solid #0ff;
+    color: #0ff;
+    text-shadow: 0 0 5px #0ff, 0 0 12px #0ff;
+    font-family: 'Courier New', monospace;
+    font-size: clamp(0.85rem, 2.2vw, 1.1rem);
+    letter-spacing: 1px;
+    padding: 0.6em 1em;
+    border-radius: 4px;
+    white-space: nowrap;
+    max-width: 80vw;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 20;
+    transition: opacity 0.4s ease, transform 0.4s ease;
+  }
+
+  .mensaje-flotante.mostrar {
+    opacity: 1;
+    transform: translate(-50%, -130%);
   }
 </style>
 </head>
@@ -119,6 +186,14 @@
   <h1 class="pink" data-text="Estamos erizos....">Estamos erizos....</h1>
 </div>
 
+<!-- Escena del corazon: se posiciona aleatoriamente en la pantalla -->
+<div class="escena-corazon" id="escenaCorazon">
+  <div class="corazon-flotante" id="corazon">
+    <canvas id="canvasCorazon"></canvas>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script>
   const titulos = document.querySelectorAll('h1');
   const simbolos = ['#', '%', '&', '/', '0', '1', 'x', '*', '¡', '!'];
@@ -126,22 +201,18 @@
   // ---- AUDIO: sonido cyberpunk sintetizado (sin archivos externos) ----
   let audioCtx = null;
   function getAudioCtx() {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
     return audioCtx;
   }
 
-  // pitch: 'alto' (cyan) o 'bajo' (pink) para diferenciar el timbre
   function sonarCyberpunk(pitch) {
     const ctx = getAudioCtx();
     const ahora = ctx.currentTime;
     const master = ctx.createGain();
-    master.gain.value = 0.16; // volumen suave, atmosférico
+    master.gain.value = 0.16;
     master.connect(ctx.destination);
 
-    // Eco tenue para dar sensación de espacio (reverbero simple con delay + feedback)
     const eco = ctx.createDelay();
     eco.delayTime.value = 0.32;
     const ecoFeedback = ctx.createGain();
@@ -156,7 +227,6 @@
     ecoFeedback.connect(eco);
     eco.connect(ctx.destination);
 
-    // Pad etéreo: dos osciladores suaves formando un intervalo de quinta
     const base = pitch === 'alto' ? 660 : 330;
     [1, 1.5].forEach((mult, i) => {
       const osc = ctx.createOscillator();
@@ -170,8 +240,8 @@
 
       const env = ctx.createGain();
       env.gain.setValueAtTime(0, ahora);
-      env.gain.linearRampToValueAtTime(i === 0 ? 0.35 : 0.18, ahora + 0.08); // ataque suave
-      env.gain.exponentialRampToValueAtTime(0.001, ahora + 1.2); // caída larga
+      env.gain.linearRampToValueAtTime(i === 0 ? 0.35 : 0.18, ahora + 0.08);
+      env.gain.exponentialRampToValueAtTime(0.001, ahora + 1.2);
 
       osc.connect(filtro);
       filtro.connect(env);
@@ -215,6 +285,228 @@
     el.addEventListener('click', disparar);
     el.addEventListener('touchstart', disparar);
   });
+
+  // ===================== CORAZON 3D (Three.js) =====================
+  // --- Lista de frases cortas: agrega, quita o edita libremente las que quieras ---
+  const FRASES_CORAZON = [
+    "Señal recibida.",
+    "Late por ti en el vacío.",
+    "Conexión establecida.",
+    "Un pulso en la oscuridad.",
+    "Aún hay corazones erizos.",
+    "Frecuencia encontrada.",
+    "El futuro también siente.",
+    "No estás solo en la red."
+  ];
+
+  // --- Parametros del corazon: cambia estos numeros para afinar el look ---
+  const CONFIG_CORAZON = {
+    color: 0xff00c8,        // color del wireframe
+    segmentosContorno: 20,  // puntos alrededor del contorno del corazon (menos = huecos mas visibles)
+    segmentosProfundidad: 15, // anillos de "puffing" de atras hacia adelante
+    profundidad: 0.4,       // que tan inflado/3D se ve (0 = plano, 1 = muy inflado)
+    velocidadGiro: 0.006,   // velocidad de rotacion del corazon
+    velocidadAnillo: 0.018  // velocidad de rotacion del anillo tipo Saturno
+  };
+
+  // Curva parametrica clasica del corazon 2D (normalizada aprox a [-1,1])
+  function puntoContornoCorazon(t) {
+    const x = 16 * Math.pow(Math.sin(t), 3);
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    return { x: x / 17, y: y / 17 };
+  }
+
+  // Genera una malla continua (no capas planas): el contorno del corazon se
+  // "infla" en el eje Z con un perfil tipo lente (cos/sin), creando una
+  // superficie curva real -> al ponerle wireframe se ve una malla fina de
+  // verdad, como un globo con forma de corazon.
+  function generarGeometriaCorazon(cfg) {
+    const { segmentosContorno: U, segmentosProfundidad: V, profundidad, color } = cfg;
+    const geometria = new THREE.BufferGeometry();
+    const posiciones = [];
+    const colores = [];
+    const indices = [];
+    const colorBase = new THREE.Color(color);
+
+    for (let j = 0; j <= V; j++) {
+      const s = -Math.PI / 2 + (Math.PI * j) / V; // -PI/2 (atras) .. PI/2 (adelante)
+      const escala = Math.cos(s);
+      const z = profundidad * Math.sin(s);
+      // brillo: adelante (z alto, cerca de camara) mas claro, atras mas oscuro -> da sensacion de volumen real
+      const brillo = 0.35 + 0.65 * ((z / profundidad) + 1) / 2;
+      for (let i = 0; i <= U; i++) {
+        const t = (Math.PI * 2 * i) / U;
+        const p = puntoContornoCorazon(t);
+        posiciones.push(p.x * escala, p.y * escala, z);
+        colores.push(colorBase.r * brillo, colorBase.g * brillo, colorBase.b * brillo);
+      }
+    }
+
+    const filas = U + 1;
+    for (let j = 0; j < V; j++) {
+      for (let i = 0; i < U; i++) {
+        const a = j * filas + i;
+        const b = a + filas;
+        const c = a + 1;
+        const d = b + 1;
+        indices.push(a, b, c, b, d, c);
+      }
+    }
+
+    geometria.setIndex(indices);
+    geometria.setAttribute('position', new THREE.Float32BufferAttribute(posiciones, 3));
+    geometria.setAttribute('color', new THREE.Float32BufferAttribute(colores, 3));
+    geometria.computeVertexNormals();
+    return geometria;
+  }
+
+  let escena, camara, renderizador, grupoCorazon, grupoAnillo, tamanoCanvas = 0;
+
+  function iniciarEscena3D() {
+    const canvas = document.getElementById('canvasCorazon');
+    escena = new THREE.Scene();
+
+    camara = new THREE.PerspectiveCamera(38, 1, 0.1, 10);
+    camara.position.set(0, 0, 3.1);
+    camara.lookAt(0, 0, 0);
+
+    renderizador = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+    renderizador.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
+    // --- Corazon wireframe ---
+    const geometriaCorazon = generarGeometriaCorazon(CONFIG_CORAZON);
+    const materialCorazon = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.9
+    });
+    const mallaCorazon = new THREE.Mesh(geometriaCorazon, materialCorazon);
+
+    // relleno MUY tenue por dentro, solo para insinuar volumen sin tapar la malla
+    const materialRelleno = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.025,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    });
+    const mallaRelleno = new THREE.Mesh(geometriaCorazon, materialRelleno);
+
+    grupoCorazon = new THREE.Group();
+    grupoCorazon.add(mallaRelleno);
+    grupoCorazon.add(mallaCorazon);
+    grupoCorazon.scale.set(1.05, 1.05, 1.05);
+    escena.add(grupoCorazon);
+
+    // --- Anillo tipo Saturno alrededor del corazon ---
+    const geometriaAnillo = new THREE.TorusGeometry(1.28, 0.012, 8, 90);
+    const materialAnillo = new THREE.MeshBasicMaterial({
+      color: CONFIG_CORAZON.color,
+      transparent: true,
+      opacity: 0.55
+    });
+    const anillo = new THREE.Mesh(geometriaAnillo, materialAnillo);
+    grupoAnillo = new THREE.Group();
+    grupoAnillo.add(anillo);
+    grupoAnillo.rotation.x = Math.PI / 2.35; // inclinacion tipo Saturno
+    escena.add(grupoAnillo);
+
+    ajustarTamanoCanvas();
+    window.addEventListener('resize', ajustarTamanoCanvas);
+    animar();
+  }
+
+  function ajustarTamanoCanvas() {
+    const contenedor = document.getElementById('corazon');
+    const tam = contenedor.clientWidth || 160;
+    if (tam === tamanoCanvas) return;
+    tamanoCanvas = tam;
+    renderizador.setSize(tam, tam, false);
+    camara.aspect = 1;
+    camara.updateProjectionMatrix();
+  }
+
+  function animar() {
+    requestAnimationFrame(animar);
+    grupoCorazon.rotation.y += CONFIG_CORAZON.velocidadGiro;
+    grupoAnillo.rotation.z += CONFIG_CORAZON.velocidadAnillo;
+    renderizador.render(escena, camara);
+  }
+
+  iniciarEscena3D();
+
+  // --- Estrellitas destello alrededor del corazon ---
+  function crearEstrellas() {
+    const escenaEl = document.getElementById('escenaCorazon');
+    const posiciones = [
+      { top: '2%', left: '4%' }, { top: '10%', right: '2%' },
+      { bottom: '4%', left: '0%' }, { bottom: '12%', right: '6%' },
+      { top: '46%', left: '-6%' }
+    ];
+    posiciones.forEach(pos => {
+      const e = document.createElement('span');
+      e.className = 'estrella';
+      e.textContent = '✦';
+      Object.assign(e.style, pos);
+      e.style.animationDelay = (Math.random() * 1.5).toFixed(2) + 's';
+      escenaEl.appendChild(e);
+    });
+  }
+  crearEstrellas();
+
+  // --- Posicionamiento aleatorio de toda la escena ---
+  const escenaCorazon = document.getElementById('escenaCorazon');
+  const corazon = document.getElementById('corazon');
+
+  function posicionarCorazonAleatorio() {
+    const tam = escenaCorazon.offsetWidth || 170;
+    const maxX = Math.max(window.innerWidth - tam, 0);
+    const maxY = Math.max(window.innerHeight - tam, 0);
+    const x = Math.random() * maxX;
+    const y = Math.random() * maxY;
+    escenaCorazon.style.left = x + 'px';
+    escenaCorazon.style.top = y + 'px';
+  }
+
+  function mostrarMensajeCorazon(x, y) {
+    const frase = FRASES_CORAZON[Math.floor(Math.random() * FRASES_CORAZON.length)];
+    const msg = document.createElement('div');
+    msg.className = 'mensaje-flotante';
+    msg.textContent = frase;
+    msg.style.left = Math.min(Math.max(x, 60), window.innerWidth - 60) + 'px';
+    msg.style.top = Math.max(y, 40) + 'px';
+    document.body.appendChild(msg);
+
+    requestAnimationFrame(() => msg.classList.add('mostrar'));
+
+    setTimeout(() => {
+      msg.classList.remove('mostrar');
+      setTimeout(() => msg.remove(), 400);
+    }, 1800);
+  }
+
+  function manejarClickCorazon(e) {
+    e.stopPropagation();
+    const x = e.touches ? e.touches[0].clientX : e.clientX;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+
+    sonarCyberpunk('bajo');
+    crearChispas(x, y);
+    mostrarMensajeCorazon(x, y - 30);
+
+    escenaCorazon.classList.add('oculto');
+    setTimeout(() => {
+      posicionarCorazonAleatorio();
+      ajustarTamanoCanvas();
+      escenaCorazon.classList.remove('oculto');
+    }, 500);
+  }
+
+  corazon.addEventListener('click', manejarClickCorazon);
+  corazon.addEventListener('touchstart', manejarClickCorazon);
+
+  posicionarCorazonAleatorio();
 </script>
 
 </body>
