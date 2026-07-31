@@ -7,6 +7,8 @@
    superpone AL FONDO (detrás del texto "En un mundo de tibios / Estamos
    erizos", pero encima del negro de fondo).
 
+   
+
    "Mi Prenovia" es un tema más: al activarlo aparece la tarjeta
    holograma flotando sobre el fondo, dejando el texto principal
    intacto en el DOM, y se APAGA el corazón 3D (y sus estrellitas)
