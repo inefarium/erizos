@@ -7,14 +7,20 @@
    superpone AL FONDO (detrás del texto "En un mundo de tibios / Estamos
    erizos", pero encima del negro de fondo).
 
-   NUEVO: "Mi Prenovia" ya NO es un enlace que te saca de la página.
-   Ahora es un tema más: al activarlo aparece la tarjeta holograma
-   flotando (igual que en mi_prenovia.html) sobre el fondo, dejando el
-   texto principal intacto, y se APAGA el corazón 3D mientras esté activo.
-   Al desactivarlo (click de nuevo o elegir otro tema), el corazón vuelve.
+   "Mi Prenovia" es un tema más: al activarlo aparece la tarjeta
+   holograma flotando (igual que en mi_prenovia.html) sobre el fondo,
+   dejando el texto principal intacto, y se APAGA el corazón 3D (y sus
+   estrellitas) mientras esté activo. Al desactivarlo (click de nuevo o
+   elegir otro tema), el corazón vuelve.
 
-   Si volvés a hacer click en el tema ya activo, se desactiva y todo
-   vuelve a la normalidad (fondo negro liso, corazón visible).
+   La tarjeta ahora:
+   - Solo aparece y se mueve en franjas cercanas a los bordes de la
+     pantalla, nunca sobre el texto principal.
+   - Deriva lento.
+   - Si choca contra un borde de la pantalla, o su posición se
+     superpone (aunque sea un poco) con el área del texto, se
+     desvanece y vuelve a aparecer en otro punto del borde, con
+     transiciones pausadas (no bruscas).
 
    NO modifica tu index.html: solo agregá antes de </body>:
      <script src="opciones-temas.js"></script>
@@ -212,8 +218,10 @@
       width: clamp(220px, 60vw, 320px);
       transform: translateY(140%);
       opacity: 0;
-      transition: transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1),
-                  opacity 1.1s ease;
+      /* Transiciones mas pausadas: que no se sienta brusco al
+         aparecer/desaparecer cuando esquiva bordes o el texto. */
+      transition: transform 2.2s cubic-bezier(0.2, 0.8, 0.2, 1),
+                  opacity 1.8s ease;
       pointer-events: none;
     }
     .tarjeta-holograma-tema.visible {
@@ -316,8 +324,8 @@
       letter-spacing: 1px;
     }
 
-    /* Clase utilitaria para ocultar el corazón mientras el tema
-       "Mi Prenovia" está activo. */
+    /* Clase utilitaria para ocultar el corazón (y sus estrellitas)
+       mientras el tema "Mi Prenovia" está activo. */
     .prenovia-oculto {
       display: none !important;
     }
@@ -553,12 +561,15 @@
   let anchoP = 0, altoP = 0;
 
   /* --------------------------------------------------------------------
-     OJO: no tengo el HTML del corazón 3D (está en tu index.html, que no
-     me pasaste), así que pruebo varios selectores comunes. Si tu corazón
-     no se apaga, decime el id/clase exacto que usás para el contenedor
-     del corazón (o pasame el index.html) y ajusto esta lista en 2 líneas.
+     El corazón 3D y sus estrellitas viven juntos dentro del contenedor
+     con id "escenaCorazon" (index.html: <div class="escena-corazon"
+     id="escenaCorazon">...corazón + estrellas...</div>). Por eso ese
+     selector va primero: ocultarlo apaga TODO junto (corazón y
+     partículas/estrellitas). El resto se deja como respaldo por si el
+     markup cambia.
      -------------------------------------------------------------------- */
   const SELECTORES_CORAZON = [
+    '#escenaCorazon', '.escena-corazon',
     '#corazon', '.corazon', '#corazon3d', '.corazon-3d',
     '#heart', '.heart', '#corazon-container', '.corazon-container',
     'canvas#corazon', '.contenedor-corazon'
@@ -578,33 +589,108 @@
     altoP = tarjetaPrenovia.offsetHeight || 160;
   }
 
-  function posicionInicialAleatoriaPrenovia() {
-    medirTarjetaPrenovia();
-    const maxX = Math.max(window.innerWidth - anchoP, 0);
-    xP = Math.random() * maxX;
-    tarjetaPrenovia.style.left = xP + 'px';
-    tarjetaPrenovia.style.top = (window.innerHeight * 0.35 + Math.random() * window.innerHeight * 0.25) + 'px';
+  /* Rectángulo del bloque de texto principal ("En un mundo de tibios /
+     Estamos erizos"), con un margen extra de seguridad alrededor para
+     que la tarjeta nunca quede pegada al texto tampoco. */
+  function obtenerRectTextoProhibido(margen = 34) {
+    const contenedorTexto = document.querySelector('.contenedor');
+    if (!contenedorTexto) return null;
+    const r = contenedorTexto.getBoundingClientRect();
+    return {
+      left: r.left - margen,
+      right: r.right + margen,
+      top: r.top - margen,
+      bottom: r.bottom + margen
+    };
+  }
 
-    const velocidad = 0.15 + Math.random() * 0.15;
+  function rectanguloSeSuperponen(a, b) {
+    if (!a || !b) return false;
+    return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+  }
+
+  /* Elige una posición dentro de una franja cercana a alguno de los 4
+     bordes de la pantalla (arriba/abajo/izquierda/derecha), evitando
+     siempre superponerse con el texto principal. */
+  function posicionAleatoriaEnBorde() {
+    medirTarjetaPrenovia();
+    const anchoVentana = window.innerWidth;
+    const altoVentana = window.innerHeight;
+    const maxX = Math.max(anchoVentana - anchoP, 0);
+    const maxY = Math.max(altoVentana - altoP, 0);
+    const bordes = ['arriba', 'abajo', 'izquierda', 'derecha'];
+
+    let posX = 0, posY = 0;
+    let intentos = 0;
+    const maximoIntentos = 14;
+
+    do {
+      const borde = bordes[Math.floor(Math.random() * bordes.length)];
+      if (borde === 'arriba') {
+        posX = Math.random() * maxX;
+        posY = 0;
+      } else if (borde === 'abajo') {
+        posX = Math.random() * maxX;
+        posY = maxY;
+      } else if (borde === 'izquierda') {
+        posX = 0;
+        posY = Math.random() * maxY;
+      } else {
+        posX = maxX;
+        posY = Math.random() * maxY;
+      }
+      intentos++;
+    } while (
+      intentos < maximoIntentos &&
+      rectanguloSeSuperponen(
+        { left: posX, right: posX + anchoP, top: posY, bottom: posY + altoP },
+        obtenerRectTextoProhibido()
+      )
+    );
+
+    xP = posX;
+    yP = posY;
+    tarjetaPrenovia.style.left = xP + 'px';
+    tarjetaPrenovia.style.top = yP + 'px';
+
+    // Deriva lenta y aleatoria (mas lenta que antes)
+    const velocidad = 0.045 + Math.random() * 0.06;
     const angulo = Math.random() * Math.PI * 2;
     vxP = Math.cos(angulo) * velocidad;
     vyP = Math.sin(angulo) * velocidad;
   }
 
+  function detenerDriftPrenovia() {
+    if (driftPrenovia) cancelAnimationFrame(driftPrenovia);
+    driftPrenovia = null;
+  }
+
+  /* Deriva la tarjeta por su franja de borde. Si llega a tocar un
+     borde de la pantalla, o su posición se acerca/superpone al texto
+     principal, no rebota: se desvanece y reaparece en otro punto. */
   function iniciarDriftPrenovia() {
     medirTarjetaPrenovia();
     let posX = parseFloat(tarjetaPrenovia.style.left) || 0;
     let posY = parseFloat(tarjetaPrenovia.style.top) || 0;
 
     function paso() {
-      posX += vxP;
-      posY += vyP;
+      const nuevoX = posX + vxP;
+      const nuevoY = posY + vyP;
 
-      if (posX <= 0) { posX = 0; vxP *= -1; }
-      if (posX + anchoP >= window.innerWidth) { posX = window.innerWidth - anchoP; vxP *= -1; }
-      if (posY <= 0) { posY = 0; vyP *= -1; }
-      if (posY + altoP >= window.innerHeight) { posY = window.innerHeight - altoP; vyP *= -1; }
+      const chocaBorde =
+        nuevoX <= 0 || nuevoX + anchoP >= window.innerWidth ||
+        nuevoY <= 0 || nuevoY + altoP >= window.innerHeight;
 
+      const rectoTarjeta = { left: nuevoX, right: nuevoX + anchoP, top: nuevoY, bottom: nuevoY + altoP };
+      const chocaTexto = rectanguloSeSuperponen(rectoTarjeta, obtenerRectTextoProhibido());
+
+      if (chocaBorde || chocaTexto) {
+        reaparecerEnOtroLugar();
+        return;
+      }
+
+      posX = nuevoX;
+      posY = nuevoY;
       tarjetaPrenovia.style.left = posX + 'px';
       tarjetaPrenovia.style.top = posY + 'px';
 
@@ -613,38 +699,41 @@
     driftPrenovia = requestAnimationFrame(paso);
   }
 
-  function detenerDriftPrenovia() {
-    if (driftPrenovia) cancelAnimationFrame(driftPrenovia);
-    driftPrenovia = null;
+  /* Desvanece la tarjeta, espera un momento (ritmo pausado, no
+     brusco), la reubica en otro borde y la vuelve a mostrar, para
+     luego retomar la deriva. */
+  function reaparecerEnOtroLugar() {
+    detenerDriftPrenovia();
+    tarjetaPrenovia.classList.remove('visible');
+
+    const tEspera = setTimeout(() => {
+      posicionAleatoriaEnBorde();
+      requestAnimationFrame(() => {
+        tarjetaPrenovia.classList.add('visible');
+      });
+
+      const tRetomaDrift = setTimeout(() => {
+        iniciarDriftPrenovia();
+      }, 2000); // espera a que termine la transicion de aparicion (mas lenta)
+      cicloPrenoviaTimeouts.push(tRetomaDrift);
+    }, 1100); // pausa oculta antes de reaparecer, para que no se sienta rapido
+
+    cicloPrenoviaTimeouts.push(tEspera);
   }
 
-  function ciclarAparicionPrenovia() {
-    posicionInicialAleatoriaPrenovia();
+  function iniciarPrenovia() {
+    overlayPrenovia.style.display = 'block';
+    ocultarCorazon();
+
+    posicionAleatoriaEnBorde();
     requestAnimationFrame(() => {
       tarjetaPrenovia.classList.add('visible');
     });
 
     const t1 = setTimeout(() => {
       iniciarDriftPrenovia();
-    }, 1450);
-
-    const tiempoVisible = 6000 + Math.random() * 5000;
-    const t2 = setTimeout(() => {
-      detenerDriftPrenovia();
-      tarjetaPrenovia.classList.remove('visible');
-
-      const tiempoEscondida = 2500 + Math.random() * 4000;
-      const t3 = setTimeout(ciclarAparicionPrenovia, tiempoEscondida);
-      cicloPrenoviaTimeouts.push(t3);
-    }, tiempoVisible);
-
-    cicloPrenoviaTimeouts.push(t1, t2);
-  }
-
-  function iniciarPrenovia() {
-    overlayPrenovia.style.display = 'block';
-    ocultarCorazon();
-    ciclarAparicionPrenovia();
+    }, 2000);
+    cicloPrenoviaTimeouts.push(t1);
   }
 
   function detenerPrenovia() {
