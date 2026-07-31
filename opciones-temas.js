@@ -315,7 +315,7 @@
       letter-spacing: 0.5px;
     }
 
-    .firma-holograma-tema {
+     .firma-holograma-tema {
       margin-top: 0.9em;
       font-size: 0.75rem;
       color: #0ff;
@@ -323,6 +323,31 @@
       text-align: right;
       letter-spacing: 1px;
     }
+
+    .link-holograma-tema {
+      display: block;
+      margin-top: 0.9em;
+      text-align: center;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      color: #0ff;
+      text-shadow: 0 0 6px #0ff;
+      text-decoration: underline;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .link-holograma-tema:hover {
+      color: #ff00c8;
+      text-shadow: 0 0 8px #ff00c8;
+    }
+
+    /* Clase utilitaria para ocultar el corazón (y sus estrellitas)
+       mientras el tema "Mi Prenovia" está activo. */
+    .prenovia-oculto {
+      display: none !important;
+    }
+  `;
+  document.head.appendChild(estilos);
 
     /* Clase utilitaria para ocultar el corazón (y sus estrellitas)
        mientras el tema "Mi Prenovia" está activo. */
