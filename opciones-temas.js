@@ -594,7 +594,7 @@
   /* Rectángulo del bloque de texto principal ("En un mundo de tibios /
      Estamos erizos"), con un margen extra de seguridad alrededor para
      que la tarjeta nunca quede pegada al texto tampoco. */
-  function obtenerRectTextoProhibido(margen = 34) {
+ function obtenerRectTextoProhibido(margen = -16) {
     const contenedorTexto = document.querySelector('.contenedor');
     if (!contenedorTexto) return null;
     const r = contenedorTexto.getBoundingClientRect();
