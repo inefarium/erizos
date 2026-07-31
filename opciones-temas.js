@@ -385,7 +385,7 @@
          En el pensamiento de tu linda existencia...<br>
          En mi prenovia... mi amada Princesa...
         </p>
-        <a class="link-holograma-tema" href="https://youtu.be/3LY99fAO8zE?si=SdWEefDWZtlfPU_l" target="_blank" rel="noopener noreferrer">Presiona aquí</a>
+        <a class="link-holograma-tema" href="https://youtu.be/3LY99fAO8zE?si=SdWEefDWZtlfPU_l" target="_blank" rel="noopener noreferrer">Te dedico</a>
       </div>
     </div>
   `;
