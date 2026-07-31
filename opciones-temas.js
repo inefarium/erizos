@@ -17,8 +17,10 @@
    - Solo aparece y se mueve en franjas cercanas a los bordes de la
      pantalla, nunca sobre el texto principal.
    - Deriva lento.
+   - Tolera pisar un poco el texto (margen negativo) antes de
+     considerarse "choque" y reubicarse.
    - Si choca contra un borde de la pantalla, o su posición se
-     superpone (aunque sea un poco) con el área del texto, se
+     superpone con el área del texto (mas alla de la tolerancia), se
      desvanece y vuelve a aparecer en otro punto del borde, con
      transiciones pausadas (no bruscas).
 
@@ -324,6 +326,23 @@
       letter-spacing: 1px;
     }
 
+    .link-holograma-tema {
+      display: block;
+      margin-top: 0.9em;
+      text-align: center;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      color: #0ff;
+      text-shadow: 0 0 6px #0ff;
+      text-decoration: underline;
+      pointer-events: auto;
+      cursor: pointer;
+    }
+    .link-holograma-tema:hover {
+      color: #ff00c8;
+      text-shadow: 0 0 8px #ff00c8;
+    }
+
     /* Clase utilitaria para ocultar el corazón (y sus estrellitas)
        mientras el tema "Mi Prenovia" está activo. */
     .prenovia-oculto {
@@ -375,7 +394,8 @@
          En el pensamiento de tu linda existencia...<br>
          En mi prenovia... mi amada Princesa...
         </p>
-        <p class="firma-holograma-tema">// mi prenovia</p>https://youtu.be/3LY99fAO8zE?si=SdWEefDWZtlfPU_l
+        <p class="firma-holograma-tema">// mi prenovia</p>
+        <a class="link-holograma-tema" href="https://youtu.be/3LY99fAO8zE?si=SdWEefDWZtlfPU_l" target="_blank" rel="noopener noreferrer">Presiona aquí</a>
       </div>
     </div>
   `;
@@ -591,9 +611,12 @@
   }
 
   /* Rectángulo del bloque de texto principal ("En un mundo de tibios /
-     Estamos erizos"), con un margen extra de seguridad alrededor para
-     que la tarjeta nunca quede pegada al texto tampoco. */
-  function obtenerRectTextoProhibido(margen = 34) {
+     Estamos erizos"). Margen NEGATIVO a propósito: hace el rectángulo
+     prohibido mas chico que el texto real, dándole tolerancia a la
+     tarjeta para pisar un poco el texto antes de considerarse choque.
+     Subí el número (ej. -24, -30) si querés que pise mas; bajalo
+     (ej. -8) si querés que pise menos. */
+  function obtenerRectTextoProhibido(margen = -16) {
     const contenedorTexto = document.querySelector('.contenedor');
     if (!contenedorTexto) return null;
     const r = contenedorTexto.getBoundingClientRect();
@@ -668,7 +691,8 @@
 
   /* Deriva la tarjeta por su franja de borde. Si llega a tocar un
      borde de la pantalla, o su posición se acerca/superpone al texto
-     principal, no rebota: se desvanece y reaparece en otro punto. */
+     principal (mas alla de la tolerancia), no rebota: se desvanece y
+     reaparece en otro punto. */
   function iniciarDriftPrenovia() {
     medirTarjetaPrenovia();
     let posX = parseFloat(tarjetaPrenovia.style.left) || 0;
