@@ -15,15 +15,15 @@
 
    La tarjeta ahora:
    - Aparece DIRECTAMENTE en un borde aleatorio de la pantalla (sin
-     transición de aparición/desaparición: siempre está visible).
-   - Se mueve tipo screensaver: direccion aleatoria (abajo, izquierda,
-     derecha, diagonal), rebotando contra los bordes de la pantalla.
+     transición de aparición/desaparición: siempre está visible, nunca
+     se hace invisible ni salta de golpe a otro lugar).
+   - Se mueve tipo screensaver (como el DVD que rebota): la dirección
+     se elige de un set fijo (abajo, izquierda, derecha, o alguna de
+     las 4 diagonales a 45°), y rebota contra los bordes de la
+     pantalla para siempre, cambiando de dirección solo al chocar con
+     un borde (reflejo físico normal, sin teletransportes).
    - Puede pasar por encima del texto principal sin problema (ya no lo
      evita).
-   - Permanece al menos 10 segundos en cada "tramo" de movimiento. Una
-     vez pasado ese tiempo, la próxima vez que toque un borde de la
-     pantalla, se reubica instantáneamente en otro borde aleatorio (con
-     una nueva dirección aleatoria) y vuelve a tener sus 10 segundos.
 
    NO modifica tu index.html: solo agregá antes de </body>:
      <script src="opciones-temas.js"></script>
@@ -570,11 +570,20 @@
   let vxP = 0, vyP = 0;
   let driftPrenovia = null;
   let anchoP = 0, altoP = 0;
-  let tiempoInicioTramoPrenovia = 0;
 
-  // Tiempo minimo (ms) que la tarjeta permanece en un mismo "tramo" de
-  // movimiento antes de que se le permita reubicarse al tocar un borde.
-  const DURACION_MINIMA_TRAMO = 10000; // 10 segundos
+  // Direcciones fijas de movimiento: abajo, izquierda, derecha, y las
+  // 4 diagonales a 45 grados (normalizadas para que la diagonal no
+  // vaya mas rapido que los movimientos rectos).
+  const DIAG = 1 / Math.SQRT2;
+  const DIRECCIONES_PRENOVIA = [
+    { x: 0, y: 1 },       // abajo
+    { x: -1, y: 0 },      // izquierda
+    { x: 1, y: 0 },       // derecha
+    { x: DIAG, y: DIAG },   // diagonal abajo-derecha
+    { x: -DIAG, y: DIAG },  // diagonal abajo-izquierda
+    { x: DIAG, y: -DIAG },  // diagonal arriba-derecha
+    { x: -DIAG, y: -DIAG }  // diagonal arriba-izquierda
+  ];
 
   /* --------------------------------------------------------------------
      El corazón 3D y sus estrellitas viven juntos dentro del contenedor
@@ -637,14 +646,13 @@
     tarjetaPrenovia.style.left = posX + 'px';
     tarjetaPrenovia.style.top = posY + 'px';
 
-    // Direccion aleatoria de movimiento (cualquier angulo: incluye
-    // abajo, izquierda, derecha y diagonales).
+    // Direccion aleatoria de movimiento, elegida del set fijo (abajo,
+    // izquierda, derecha, diagonal), para que la diagonal se vea
+    // siempre a 45 grados real.
     const velocidad = 0.5 + Math.random() * 0.6;
-    const angulo = Math.random() * Math.PI * 2;
-    vxP = Math.cos(angulo) * velocidad;
-    vyP = Math.sin(angulo) * velocidad;
-
-    tiempoInicioTramoPrenovia = performance.now();
+    const dir = DIRECCIONES_PRENOVIA[Math.floor(Math.random() * DIRECCIONES_PRENOVIA.length)];
+    vxP = dir.x * velocidad;
+    vyP = dir.y * velocidad;
   }
 
   function detenerDriftPrenovia() {
@@ -652,11 +660,12 @@
     driftPrenovia = null;
   }
 
-  /* Movimiento tipo screensaver: rebota contra los bordes de la
-     pantalla mientras no se haya cumplido el tiempo minimo del tramo
-     actual. Una vez cumplido ese tiempo, la proxima vez que toque un
-     borde, se reubica instantaneamente en otro punto de borde con una
-     nueva direccion aleatoria (y reinicia su propio cronometro de 10s). */
+  /* Movimiento tipo screensaver (como el DVD que rebota): la tarjeta
+     nunca se hace invisible ni salta de golpe a otro lugar. Solo
+     rebota contra los bordes de la pantalla, cambiando de dirección
+     al chocar (reflejo físico: invierte vx al chocar con una pared
+     vertical, invierte vy al chocar con una horizontal). Esto hace
+     que la diagonal se vea real y consistente. */
   function iniciarDriftPrenovia() {
     medirTarjetaPrenovia();
     let posX = parseFloat(tarjetaPrenovia.style.left) || 0;
@@ -666,19 +675,10 @@
       posX += vxP;
       posY += vyP;
 
-      let tocoBorde = false;
-      if (posX <= 0) { posX = 0; vxP *= -1; tocoBorde = true; }
-      if (posX + anchoP >= window.innerWidth) { posX = window.innerWidth - anchoP; vxP *= -1; tocoBorde = true; }
-      if (posY <= 0) { posY = 0; vyP *= -1; tocoBorde = true; }
-      if (posY + altoP >= window.innerHeight) { posY = window.innerHeight - altoP; vyP *= -1; tocoBorde = true; }
-
-      const tiempoTranscurrido = performance.now() - tiempoInicioTramoPrenovia;
-
-      if (tocoBorde && tiempoTranscurrido >= DURACION_MINIMA_TRAMO) {
-        posicionAleatoriaEnBorde();
-        driftPrenovia = requestAnimationFrame(paso);
-        return;
-      }
+      if (posX <= 0) { posX = 0; vxP = Math.abs(vxP); }
+      if (posX + anchoP >= window.innerWidth) { posX = window.innerWidth - anchoP; vxP = -Math.abs(vxP); }
+      if (posY <= 0) { posY = 0; vyP = Math.abs(vyP); }
+      if (posY + altoP >= window.innerHeight) { posY = window.innerHeight - altoP; vyP = -Math.abs(vyP); }
 
       tarjetaPrenovia.style.left = posX + 'px';
       tarjetaPrenovia.style.top = posY + 'px';
