@@ -370,11 +370,13 @@
       <div class="marco-holograma-tema">
         <h2 class="titulo-holograma-tema">TRANSMISIÓN INEFARIUM</h2>
         <p class="cuerpo-holograma-tema">
-          Frecuencia encontrada.<br>
-          Un mensaje se materializa solo para ti.<br>
-          Erizos, siempre conectados.
+          En el suspiro de nuestro mundo soñado...<br>
+         En aquello que a sido magnificado...<br>
+         En el pensamiento de tu linda existencia...<br>
+         En mi prenovia... mi amada Princesa...
         </p>
         <p class="firma-holograma-tema">// mi prenovia</p>
+        <a class="link-holograma-tema" href="https://youtu.be/3LY99fAO8zE?si=SdWEefDWZtlfPU_l" target="_blank" rel="noopener noreferrer">Presiona aquí</a>
       </div>
     </div>
   `;
