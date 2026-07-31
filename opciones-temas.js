@@ -111,6 +111,32 @@
       opacity: 0.5;
     }
 
+    .titulo-lista-temas {
+      padding: 10px 14px 8px;
+      font-size: 0.75rem;
+      letter-spacing: 1.5px;
+      color: #ff00c8;
+      text-shadow: 0 0 6px #ff00c8;
+      border-bottom: 1px solid rgba(255,0,200,0.35);
+      text-transform: uppercase;
+    }
+
+    .separador-lista-temas {
+      height: 1px;
+      margin: 2px 0;
+      background: rgba(0,255,255,0.25);
+    }
+
+    .opcion-enlace::before {
+      content: "↳ ";
+      opacity: 0.7;
+    }
+    .opcion-enlace:hover {
+      color: #ff00c8;
+      background: rgba(255,0,200,0.1);
+      text-shadow: 0 0 6px #ff00c8;
+    }
+
     /* ---------- Overlays de temas (siempre detrás del texto/corazón) --- */
     .canvas-temas {
       position: fixed;
@@ -193,10 +219,13 @@
   contenedorMenu.innerHTML = `
     <button class="boton-menu-temas" id="botonMenuTemas" aria-haspopup="true" aria-expanded="false">☰</button>
     <div class="lista-temas" id="listaTemas" role="menu">
+      <div class="titulo-lista-temas">Conmemoraciones Inefarium</div>
       <button class="opcion-tema" data-tema="lluvia"     role="menuitemradio">Lluvia de código</button>
       <button class="opcion-tema" data-tema="escaner"    role="menuitemradio">Escáner láser</button>
       <button class="opcion-tema" data-tema="grid"       role="menuitemradio">Grid neón</button>
       <button class="opcion-tema" data-tema="particulas" role="menuitemradio">Partículas</button>
+      <div class="separador-lista-temas"></div>
+      <button class="opcion-tema opcion-enlace" data-enlace="mi_prenovia.html" role="menuitem">Mi Prenovia</button>
     </div>
   `;
   document.body.appendChild(contenedorMenu);
@@ -218,13 +247,23 @@
   const botonMenu = document.getElementById('botonMenuTemas');
   const listaTemas = document.getElementById('listaTemas');
 
+  let temporizadorCierre = null;
+
   function abrirMenu() {
+    clearTimeout(temporizadorCierre);
     contenedorMenu.classList.add('abierto');
     botonMenu.setAttribute('aria-expanded', 'true');
   }
   function cerrarMenu() {
+    clearTimeout(temporizadorCierre);
     contenedorMenu.classList.remove('abierto');
     botonMenu.setAttribute('aria-expanded', 'false');
+  }
+  // Espera un poco antes de cerrar: le da tiempo al cursor de llegar
+  // hasta las opciones sin que el menu se cierre de golpe en el camino.
+  function cerrarMenuConTolerancia() {
+    clearTimeout(temporizadorCierre);
+    temporizadorCierre = setTimeout(cerrarMenu, 300);
   }
   function alternarMenu() {
     contenedorMenu.classList.contains('abierto') ? cerrarMenu() : abrirMenu();
@@ -234,9 +273,11 @@
     e.stopPropagation();
     alternarMenu();
   });
-  // También se despliega al pasar el cursor (desktop)
+  // También se despliega al pasar el cursor (desktop), con tolerancia al salir
   contenedorMenu.addEventListener('mouseenter', abrirMenu);
-  contenedorMenu.addEventListener('mouseleave', cerrarMenu);
+  contenedorMenu.addEventListener('mouseleave', cerrarMenuConTolerancia);
+  listaTemas.addEventListener('mouseenter', abrirMenu);
+  listaTemas.addEventListener('mouseleave', cerrarMenuConTolerancia);
 
   document.addEventListener('click', (e) => {
     if (!contenedorMenu.contains(e.target)) cerrarMenu();
@@ -244,7 +285,10 @@
 
   /* ---------- 4. Lógica de selección exclusiva (tipo trigger) ---------- */
   let temaActivo = null;
-  const botonesOpcion = Array.from(document.querySelectorAll('.opcion-tema'));
+  // Solo las opciones con data-tema entran en la selección exclusiva.
+  // La opción con data-enlace (Mi Prenovia) se maneja aparte, más abajo.
+  const botonesOpcion = Array.from(document.querySelectorAll('.opcion-tema[data-tema]'));
+  const botonesEnlace = Array.from(document.querySelectorAll('.opcion-tema[data-enlace]'));
 
   function apagarTodosLosEfectos() {
     detenerLluvia();
@@ -286,6 +330,15 @@
       temaActivo = tema;
       botonesOpcion.forEach((b) => b.classList.toggle('activa', b === btn));
       activarTema(tema);
+    });
+  });
+
+  // Opciones tipo enlace (por ahora solo "Mi Prenovia"): redirigen directo,
+  // no participan de la selección exclusiva de temas.
+  botonesEnlace.forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.location.href = btn.dataset.enlace;
     });
   });
 
