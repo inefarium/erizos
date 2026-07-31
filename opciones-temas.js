@@ -8,21 +8,22 @@
    erizos", pero encima del negro de fondo).
 
    "Mi Prenovia" es un tema más: al activarlo aparece la tarjeta
-   holograma flotando (igual que en mi_prenovia.html) sobre el fondo,
-   dejando el texto principal intacto, y se APAGA el corazón 3D (y sus
-   estrellitas) mientras esté activo. Al desactivarlo (click de nuevo o
-   elegir otro tema), el corazón vuelve.
+   holograma flotando sobre el fondo, dejando el texto principal
+   intacto en el DOM, y se APAGA el corazón 3D (y sus estrellitas)
+   mientras esté activo. Al desactivarlo (click de nuevo o elegir otro
+   tema), el corazón vuelve.
 
    La tarjeta ahora:
-   - Solo aparece y se mueve en franjas cercanas a los bordes de la
-     pantalla, nunca sobre el texto principal.
-   - Deriva lento.
-   - Tolera pisar un poco el texto (margen negativo) antes de
-     considerarse "choque" y reubicarse.
-   - Si choca contra un borde de la pantalla, o su posición se
-     superpone con el área del texto (mas alla de la tolerancia), se
-     desvanece y vuelve a aparecer en otro punto del borde, con
-     transiciones pausadas (no bruscas).
+   - Aparece DIRECTAMENTE en un borde aleatorio de la pantalla (sin
+     transición de aparición/desaparición: siempre está visible).
+   - Se mueve tipo screensaver: direccion aleatoria (abajo, izquierda,
+     derecha, diagonal), rebotando contra los bordes de la pantalla.
+   - Puede pasar por encima del texto principal sin problema (ya no lo
+     evita).
+   - Permanece al menos 10 segundos en cada "tramo" de movimiento. Una
+     vez pasado ese tiempo, la próxima vez que toque un borde de la
+     pantalla, se reubica instantáneamente en otro borde aleatorio (con
+     una nueva dirección aleatoria) y vuelve a tener sus 10 segundos.
 
    NO modifica tu index.html: solo agregá antes de </body>:
      <script src="opciones-temas.js"></script>
@@ -218,17 +219,7 @@
     .tarjeta-holograma-tema {
       position: fixed;
       width: clamp(220px, 60vw, 320px);
-      transform: translateY(140%);
-      opacity: 0;
-      /* Transiciones mas pausadas: que no se sienta brusco al
-         aparecer/desaparecer cuando esquiva bordes o el texto. */
-      transition: transform 2.2s cubic-bezier(0.2, 0.8, 0.2, 1),
-                  opacity 1.8s ease;
       pointer-events: none;
-    }
-    .tarjeta-holograma-tema.visible {
-      transform: translateY(0);
-      opacity: 1;
     }
 
     .marco-holograma-tema {
@@ -576,10 +567,14 @@
 
   /* ---------- 7. Efecto "Mi Prenovia" (tarjeta holograma + apaga corazón) */
   const tarjetaPrenovia = document.getElementById('tarjetaHologramaTema');
-  let xP = 0, yP = 0, vxP = 0, vyP = 0;
+  let vxP = 0, vyP = 0;
   let driftPrenovia = null;
-  let cicloPrenoviaTimeouts = [];
   let anchoP = 0, altoP = 0;
+  let tiempoInicioTramoPrenovia = 0;
+
+  // Tiempo minimo (ms) que la tarjeta permanece en un mismo "tramo" de
+  // movimiento antes de que se le permita reubicarse al tocar un borde.
+  const DURACION_MINIMA_TRAMO = 10000; // 10 segundos
 
   /* --------------------------------------------------------------------
      El corazón 3D y sus estrellitas viven juntos dentro del contenedor
@@ -610,32 +605,11 @@
     altoP = tarjetaPrenovia.offsetHeight || 160;
   }
 
-  /* Rectángulo del bloque de texto principal ("En un mundo de tibios /
-     Estamos erizos"). Margen NEGATIVO a propósito: hace el rectángulo
-     prohibido mas chico que el texto real, dándole tolerancia a la
-     tarjeta para pisar un poco el texto antes de considerarse choque.
-     Subí el número (ej. -24, -30) si querés que pise mas; bajalo
-     (ej. -8) si querés que pise menos. */
-  function obtenerRectTextoProhibido(margen = -16) {
-    const contenedorTexto = document.querySelector('.contenedor');
-    if (!contenedorTexto) return null;
-    const r = contenedorTexto.getBoundingClientRect();
-    return {
-      left: r.left - margen,
-      right: r.right + margen,
-      top: r.top - margen,
-      bottom: r.bottom + margen
-    };
-  }
-
-  function rectanguloSeSuperponen(a, b) {
-    if (!a || !b) return false;
-    return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
-  }
-
-  /* Elige una posición dentro de una franja cercana a alguno de los 4
-     bordes de la pantalla (arriba/abajo/izquierda/derecha), evitando
-     siempre superponerse con el texto principal. */
+  /* Elige una posición en alguno de los 4 bordes de la pantalla
+     (arriba/abajo/izquierda/derecha) y le asigna una dirección
+     aleatoria de movimiento (cualquier ángulo: abajo, izquierda,
+     derecha, diagonal...). Ya NO evita el texto principal: puede
+     posicionarse y moverse sobre él sin problema. */
   function posicionAleatoriaEnBorde() {
     medirTarjetaPrenovia();
     const anchoVentana = window.innerWidth;
@@ -643,45 +617,34 @@
     const maxX = Math.max(anchoVentana - anchoP, 0);
     const maxY = Math.max(altoVentana - altoP, 0);
     const bordes = ['arriba', 'abajo', 'izquierda', 'derecha'];
+    const borde = bordes[Math.floor(Math.random() * bordes.length)];
 
-    let posX = 0, posY = 0;
-    let intentos = 0;
-    const maximoIntentos = 14;
+    let posX, posY;
+    if (borde === 'arriba') {
+      posX = Math.random() * maxX;
+      posY = 0;
+    } else if (borde === 'abajo') {
+      posX = Math.random() * maxX;
+      posY = maxY;
+    } else if (borde === 'izquierda') {
+      posX = 0;
+      posY = Math.random() * maxY;
+    } else {
+      posX = maxX;
+      posY = Math.random() * maxY;
+    }
 
-    do {
-      const borde = bordes[Math.floor(Math.random() * bordes.length)];
-      if (borde === 'arriba') {
-        posX = Math.random() * maxX;
-        posY = 0;
-      } else if (borde === 'abajo') {
-        posX = Math.random() * maxX;
-        posY = maxY;
-      } else if (borde === 'izquierda') {
-        posX = 0;
-        posY = Math.random() * maxY;
-      } else {
-        posX = maxX;
-        posY = Math.random() * maxY;
-      }
-      intentos++;
-    } while (
-      intentos < maximoIntentos &&
-      rectanguloSeSuperponen(
-        { left: posX, right: posX + anchoP, top: posY, bottom: posY + altoP },
-        obtenerRectTextoProhibido()
-      )
-    );
+    tarjetaPrenovia.style.left = posX + 'px';
+    tarjetaPrenovia.style.top = posY + 'px';
 
-    xP = posX;
-    yP = posY;
-    tarjetaPrenovia.style.left = xP + 'px';
-    tarjetaPrenovia.style.top = yP + 'px';
-
-    // Deriva lenta y aleatoria (mas lenta que antes)
-    const velocidad = 0.045 + Math.random() * 0.06;
+    // Direccion aleatoria de movimiento (cualquier angulo: incluye
+    // abajo, izquierda, derecha y diagonales).
+    const velocidad = 0.5 + Math.random() * 0.6;
     const angulo = Math.random() * Math.PI * 2;
     vxP = Math.cos(angulo) * velocidad;
     vyP = Math.sin(angulo) * velocidad;
+
+    tiempoInicioTramoPrenovia = performance.now();
   }
 
   function detenerDriftPrenovia() {
@@ -689,33 +652,34 @@
     driftPrenovia = null;
   }
 
-  /* Deriva la tarjeta por su franja de borde. Si llega a tocar un
-     borde de la pantalla, o su posición se acerca/superpone al texto
-     principal (mas alla de la tolerancia), no rebota: se desvanece y
-     reaparece en otro punto. */
+  /* Movimiento tipo screensaver: rebota contra los bordes de la
+     pantalla mientras no se haya cumplido el tiempo minimo del tramo
+     actual. Una vez cumplido ese tiempo, la proxima vez que toque un
+     borde, se reubica instantaneamente en otro punto de borde con una
+     nueva direccion aleatoria (y reinicia su propio cronometro de 10s). */
   function iniciarDriftPrenovia() {
     medirTarjetaPrenovia();
     let posX = parseFloat(tarjetaPrenovia.style.left) || 0;
     let posY = parseFloat(tarjetaPrenovia.style.top) || 0;
 
     function paso() {
-      const nuevoX = posX + vxP;
-      const nuevoY = posY + vyP;
+      posX += vxP;
+      posY += vyP;
 
-      const chocaBorde =
-        nuevoX <= 0 || nuevoX + anchoP >= window.innerWidth ||
-        nuevoY <= 0 || nuevoY + altoP >= window.innerHeight;
+      let tocoBorde = false;
+      if (posX <= 0) { posX = 0; vxP *= -1; tocoBorde = true; }
+      if (posX + anchoP >= window.innerWidth) { posX = window.innerWidth - anchoP; vxP *= -1; tocoBorde = true; }
+      if (posY <= 0) { posY = 0; vyP *= -1; tocoBorde = true; }
+      if (posY + altoP >= window.innerHeight) { posY = window.innerHeight - altoP; vyP *= -1; tocoBorde = true; }
 
-      const rectoTarjeta = { left: nuevoX, right: nuevoX + anchoP, top: nuevoY, bottom: nuevoY + altoP };
-      const chocaTexto = rectanguloSeSuperponen(rectoTarjeta, obtenerRectTextoProhibido());
+      const tiempoTranscurrido = performance.now() - tiempoInicioTramoPrenovia;
 
-      if (chocaBorde || chocaTexto) {
-        reaparecerEnOtroLugar();
+      if (tocoBorde && tiempoTranscurrido >= DURACION_MINIMA_TRAMO) {
+        posicionAleatoriaEnBorde();
+        driftPrenovia = requestAnimationFrame(paso);
         return;
       }
 
-      posX = nuevoX;
-      posY = nuevoY;
       tarjetaPrenovia.style.left = posX + 'px';
       tarjetaPrenovia.style.top = posY + 'px';
 
@@ -724,49 +688,16 @@
     driftPrenovia = requestAnimationFrame(paso);
   }
 
-  /* Desvanece la tarjeta, espera un momento (ritmo pausado, no
-     brusco), la reubica en otro borde y la vuelve a mostrar, para
-     luego retomar la deriva. */
-  function reaparecerEnOtroLugar() {
-    detenerDriftPrenovia();
-    tarjetaPrenovia.classList.remove('visible');
-
-    const tEspera = setTimeout(() => {
-      posicionAleatoriaEnBorde();
-      requestAnimationFrame(() => {
-        tarjetaPrenovia.classList.add('visible');
-      });
-
-      const tRetomaDrift = setTimeout(() => {
-        iniciarDriftPrenovia();
-      }, 2000); // espera a que termine la transicion de aparicion (mas lenta)
-      cicloPrenoviaTimeouts.push(tRetomaDrift);
-    }, 1100); // pausa oculta antes de reaparecer, para que no se sienta rapido
-
-    cicloPrenoviaTimeouts.push(tEspera);
-  }
-
   function iniciarPrenovia() {
     overlayPrenovia.style.display = 'block';
     ocultarCorazon();
-
     posicionAleatoriaEnBorde();
-    requestAnimationFrame(() => {
-      tarjetaPrenovia.classList.add('visible');
-    });
-
-    const t1 = setTimeout(() => {
-      iniciarDriftPrenovia();
-    }, 2000);
-    cicloPrenoviaTimeouts.push(t1);
+    iniciarDriftPrenovia();
   }
 
   function detenerPrenovia() {
     overlayPrenovia.style.display = 'none';
     detenerDriftPrenovia();
-    cicloPrenoviaTimeouts.forEach((id) => clearTimeout(id));
-    cicloPrenoviaTimeouts = [];
-    tarjetaPrenovia.classList.remove('visible');
     mostrarCorazon();
   }
 })();
