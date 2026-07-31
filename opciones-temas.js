@@ -315,30 +315,13 @@
       letter-spacing: 0.5px;
     }
 
-     .firma-holograma-tema {
+    .firma-holograma-tema {
       margin-top: 0.9em;
       font-size: 0.75rem;
       color: #0ff;
       opacity: 0.75;
       text-align: right;
       letter-spacing: 1px;
-    }
-
-    .link-holograma-tema {
-      display: block;
-      margin-top: 0.9em;
-      text-align: center;
-      font-size: 0.9rem;
-      letter-spacing: 1px;
-      color: #0ff;
-      text-shadow: 0 0 6px #0ff;
-      text-decoration: underline;
-      pointer-events: auto;
-      cursor: pointer;
-    }
-    .link-holograma-tema:hover {
-      color: #ff00c8;
-      text-shadow: 0 0 8px #ff00c8;
     }
 
     /* Clase utilitaria para ocultar el corazón (y sus estrellitas)
@@ -392,8 +375,7 @@
          En el pensamiento de tu linda existencia...<br>
          En mi prenovia... mi amada Princesa...
         </p>
-        <p class="firma-holograma-tema">// mi prenovia</p>
-        <a class="link-holograma-tema" href="https://youtu.be/3LY99fAO8zE?si=SdWEefDWZtlfPU_l" target="_blank" rel="noopener noreferrer">Presiona aquí</a>
+        <p class="firma-holograma-tema">// mi prenovia</p>https://youtu.be/3LY99fAO8zE?si=SdWEefDWZtlfPU_l
       </div>
     </div>
   `;
@@ -611,7 +593,7 @@
   /* Rectángulo del bloque de texto principal ("En un mundo de tibios /
      Estamos erizos"), con un margen extra de seguridad alrededor para
      que la tarjeta nunca quede pegada al texto tampoco. */
- function obtenerRectTextoProhibido(margen = -16) {
+  function obtenerRectTextoProhibido(margen = 34) {
     const contenedorTexto = document.querySelector('.contenedor');
     if (!contenedorTexto) return null;
     const r = contenedorTexto.getBoundingClientRect();
