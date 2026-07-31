@@ -349,14 +349,6 @@
   `;
   document.head.appendChild(estilos);
 
-    /* Clase utilitaria para ocultar el corazón (y sus estrellitas)
-       mientras el tema "Mi Prenovia" está activo. */
-    .prenovia-oculto {
-      display: none !important;
-    }
-  `;
-  document.head.appendChild(estilos);
-
   /* ---------- 2. HTML del botón + menú + overlays ---------------------- */
   const contenedorMenu = document.createElement('div');
   contenedorMenu.className = 'menu-temas';
