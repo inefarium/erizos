@@ -2,13 +2,19 @@
    OPCIONES-TEMAS.JS
    -----------------------------------------------------------------
    Módulo independiente: agrega un botón de opciones (esquina) con un
-   menú desplegable de 4 "temas" tipo trigger (selección exclusiva,
+   menú desplegable de 5 "temas" tipo trigger (selección exclusiva,
    tipo radio-button). Al elegir uno se activa un efecto visual que se
    superpone AL FONDO (detrás del texto "En un mundo de tibios / Estamos
-   erizos" y detrás del corazón 3D, pero encima del negro de fondo).
+   erizos", pero encima del negro de fondo).
+
+   NUEVO: "Mi Prenovia" ya NO es un enlace que te saca de la página.
+   Ahora es un tema más: al activarlo aparece la tarjeta holograma
+   flotando (igual que en mi_prenovia.html) sobre el fondo, dejando el
+   texto principal intacto, y se APAGA el corazón 3D mientras esté activo.
+   Al desactivarlo (click de nuevo o elegir otro tema), el corazón vuelve.
 
    Si volvés a hacer click en el tema ya activo, se desactiva y todo
-   vuelve a la normalidad (fondo negro liso).
+   vuelve a la normalidad (fondo negro liso, corazón visible).
 
    NO modifica tu index.html: solo agregá antes de </body>:
      <script src="opciones-temas.js"></script>
@@ -20,9 +26,7 @@
   /* ---------- 1. ESTILOS (inyectados, no tocan tu <style> original) --- */
   const estilos = document.createElement('style');
   estilos.textContent = `
-    /* Empujamos el texto principal por encima de los overlays de tema.
-       (El resto de tu CSS original no se toca, solo agregamos z-index
-       y position a .contenedor para que quede arriba de los efectos) */
+    /* Empujamos el texto principal por encima de los overlays de tema. */
     .contenedor {
       position: relative;
       z-index: 5;
@@ -121,23 +125,7 @@
       text-transform: uppercase;
     }
 
-    .separador-lista-temas {
-      height: 1px;
-      margin: 2px 0;
-      background: rgba(0,255,255,0.25);
-    }
-
-    .opcion-enlace::before {
-      content: "↳ ";
-      opacity: 0.7;
-    }
-    .opcion-enlace:hover {
-      color: #ff00c8;
-      background: rgba(255,0,200,0.1);
-      text-shadow: 0 0 6px #ff00c8;
-    }
-
-    /* ---------- Overlays de temas (siempre detrás del texto/corazón) --- */
+    /* ---------- Overlays de temas (siempre detrás del texto) ---------- */
     .canvas-temas {
       position: fixed;
       inset: 0;
@@ -209,6 +197,130 @@
       0%   { background-position: 0 0, 0 0; }
       100% { background-position: 0 80px, 0 0; }
     }
+
+    /* ---------- Tema "Mi Prenovia" (tarjeta holograma flotante) -------- */
+    .overlay-prenovia {
+      position: fixed;
+      inset: 0;
+      z-index: 4; /* encima de los demás overlays (3), debajo del texto (5) */
+      display: none;
+      pointer-events: none;
+    }
+
+    .tarjeta-holograma-tema {
+      position: fixed;
+      width: clamp(220px, 60vw, 320px);
+      transform: translateY(140%);
+      opacity: 0;
+      transition: transform 1.4s cubic-bezier(0.2, 0.8, 0.2, 1),
+                  opacity 1.1s ease;
+      pointer-events: none;
+    }
+    .tarjeta-holograma-tema.visible {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    .marco-holograma-tema {
+      position: relative;
+      padding: 1.4em 1.2em;
+      border: 1px solid #0ff;
+      border-radius: 10px;
+      background:
+        linear-gradient(180deg, rgba(0,255,255,0.06), rgba(255,0,200,0.05));
+      box-shadow:
+        0 0 12px rgba(0,255,255,0.55),
+        0 0 30px rgba(255,0,200,0.25),
+        inset 0 0 18px rgba(0,255,255,0.15);
+      overflow: hidden;
+      animation: parpadeoHolograma 3.6s infinite;
+    }
+
+    @keyframes parpadeoHolograma {
+      0%, 100% { opacity: 1; }
+      92%      { opacity: 1; }
+      93%      { opacity: 0.55; }
+      94%      { opacity: 1; }
+      96%      { opacity: 0.7; }
+      97%      { opacity: 1; }
+    }
+
+    .marco-holograma-tema::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(0,255,255,0.10) 0px,
+        rgba(0,255,255,0.10) 1px,
+        transparent 2px,
+        transparent 4px
+      );
+      mix-blend-mode: screen;
+      animation: desplazarLineas 5s linear infinite;
+      pointer-events: none;
+    }
+
+    .marco-holograma-tema::after {
+      content: "";
+      position: absolute;
+      left: 0;
+      width: 100%;
+      height: 40%;
+      background: linear-gradient(
+        180deg,
+        transparent 0%,
+        rgba(0,255,255,0.22) 50%,
+        transparent 100%
+      );
+      animation: barridoTarjeta 4s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes desplazarLineas {
+      0%   { background-position-y: 0; }
+      100% { background-position-y: 40px; }
+    }
+
+    @keyframes barridoTarjeta {
+      0%   { top: -40%; }
+      50%  { top: 100%; }
+      100% { top: -40%; }
+    }
+
+    .titulo-holograma-tema {
+      margin: 0 0 0.5em 0;
+      font-size: 1.15rem;
+      color: #0ff;
+      text-shadow: 0 0 6px #0ff, 0 0 14px #0ff;
+      letter-spacing: 2px;
+      text-align: center;
+    }
+
+    .cuerpo-holograma-tema {
+      margin: 0;
+      font-size: 0.85rem;
+      line-height: 1.5em;
+      color: #ff00c8;
+      text-shadow: 0 0 5px #ff00c8;
+      text-align: center;
+      letter-spacing: 0.5px;
+    }
+
+    .firma-holograma-tema {
+      margin-top: 0.9em;
+      font-size: 0.75rem;
+      color: #0ff;
+      opacity: 0.75;
+      text-align: right;
+      letter-spacing: 1px;
+    }
+
+    /* Clase utilitaria para ocultar el corazón mientras el tema
+       "Mi Prenovia" está activo. */
+    .prenovia-oculto {
+      display: none !important;
+    }
   `;
   document.head.appendChild(estilos);
 
@@ -224,8 +336,7 @@
       <button class="opcion-tema" data-tema="escaner"    role="menuitemradio">Escáner láser</button>
       <button class="opcion-tema" data-tema="grid"       role="menuitemradio">Grid neón</button>
       <button class="opcion-tema" data-tema="particulas" role="menuitemradio">Partículas</button>
-      <div class="separador-lista-temas"></div>
-      <button class="opcion-tema opcion-enlace" data-enlace="mi_prenovia.html" role="menuitem">Mi Prenovia</button>
+      <button class="opcion-tema" data-tema="prenovia"   role="menuitemradio">Mi Prenovia</button>
     </div>
   `;
   document.body.appendChild(contenedorMenu);
@@ -243,6 +354,24 @@
   overlayGrid.className = 'overlay-grid';
   document.body.appendChild(overlayGrid);
 
+  const overlayPrenovia = document.createElement('div');
+  overlayPrenovia.className = 'overlay-prenovia';
+  overlayPrenovia.id = 'overlayPrenovia';
+  overlayPrenovia.innerHTML = `
+    <div class="tarjeta-holograma-tema" id="tarjetaHologramaTema">
+      <div class="marco-holograma-tema">
+        <h2 class="titulo-holograma-tema">TRANSMISIÓN INEFARIUM</h2>
+        <p class="cuerpo-holograma-tema">
+          Frecuencia encontrada.<br>
+          Un mensaje se materializa solo para ti.<br>
+          Erizos, siempre conectados.
+        </p>
+        <p class="firma-holograma-tema">// mi prenovia</p>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlayPrenovia);
+
   /* ---------- 3. Abrir / cerrar el menú --------------------------------- */
   const botonMenu = document.getElementById('botonMenuTemas');
   const listaTemas = document.getElementById('listaTemas');
@@ -259,8 +388,6 @@
     contenedorMenu.classList.remove('abierto');
     botonMenu.setAttribute('aria-expanded', 'false');
   }
-  // Espera un poco antes de cerrar: le da tiempo al cursor de llegar
-  // hasta las opciones sin que el menu se cierre de golpe en el camino.
   function cerrarMenuConTolerancia() {
     clearTimeout(temporizadorCierre);
     temporizadorCierre = setTimeout(cerrarMenu, 300);
@@ -273,7 +400,6 @@
     e.stopPropagation();
     alternarMenu();
   });
-  // También se despliega al pasar el cursor (desktop), con tolerancia al salir
   contenedorMenu.addEventListener('mouseenter', abrirMenu);
   contenedorMenu.addEventListener('mouseleave', cerrarMenuConTolerancia);
   listaTemas.addEventListener('mouseenter', abrirMenu);
@@ -285,14 +411,12 @@
 
   /* ---------- 4. Lógica de selección exclusiva (tipo trigger) ---------- */
   let temaActivo = null;
-  // Solo las opciones con data-tema entran en la selección exclusiva.
-  // La opción con data-enlace (Mi Prenovia) se maneja aparte, más abajo.
   const botonesOpcion = Array.from(document.querySelectorAll('.opcion-tema[data-tema]'));
-  const botonesEnlace = Array.from(document.querySelectorAll('.opcion-tema[data-enlace]'));
 
   function apagarTodosLosEfectos() {
     detenerLluvia();
     detenerParticulas();
+    detenerPrenovia();
     canvasTemas.style.display = 'none';
     overlayEscaner.style.display = 'none';
     overlayGrid.style.display = 'none';
@@ -310,6 +434,8 @@
       overlayEscaner.style.display = 'block';
     } else if (nombre === 'grid') {
       overlayGrid.style.display = 'block';
+    } else if (nombre === 'prenovia') {
+      iniciarPrenovia();
     }
   }
 
@@ -319,26 +445,15 @@
       const tema = btn.dataset.tema;
 
       if (temaActivo === tema) {
-        // Ya estaba activo -> se desmarca todo, vuelve a lo normal
         temaActivo = null;
         botonesOpcion.forEach((b) => b.classList.remove('activa'));
         apagarTodosLosEfectos();
         return;
       }
 
-      // Se activa esta y se desmarcan las demás
       temaActivo = tema;
       botonesOpcion.forEach((b) => b.classList.toggle('activa', b === btn));
       activarTema(tema);
-    });
-  });
-
-  // Opciones tipo enlace (por ahora solo "Mi Prenovia"): redirigen directo,
-  // no participan de la selección exclusiva de temas.
-  botonesEnlace.forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      window.location.href = btn.dataset.enlace;
     });
   });
 
@@ -428,5 +543,116 @@
     if (idParticulas) cancelAnimationFrame(idParticulas);
     idParticulas = null;
     ctx.clearRect(0, 0, canvasTemas.width, canvasTemas.height);
+  }
+
+  /* ---------- 7. Efecto "Mi Prenovia" (tarjeta holograma + apaga corazón) */
+  const tarjetaPrenovia = document.getElementById('tarjetaHologramaTema');
+  let xP = 0, yP = 0, vxP = 0, vyP = 0;
+  let driftPrenovia = null;
+  let cicloPrenoviaTimeouts = [];
+  let anchoP = 0, altoP = 0;
+
+  /* --------------------------------------------------------------------
+     OJO: no tengo el HTML del corazón 3D (está en tu index.html, que no
+     me pasaste), así que pruebo varios selectores comunes. Si tu corazón
+     no se apaga, decime el id/clase exacto que usás para el contenedor
+     del corazón (o pasame el index.html) y ajusto esta lista en 2 líneas.
+     -------------------------------------------------------------------- */
+  const SELECTORES_CORAZON = [
+    '#corazon', '.corazon', '#corazon3d', '.corazon-3d',
+    '#heart', '.heart', '#corazon-container', '.corazon-container',
+    'canvas#corazon', '.contenedor-corazon'
+  ];
+
+  function ocultarCorazon() {
+    SELECTORES_CORAZON.forEach((sel) => {
+      document.querySelectorAll(sel).forEach((el) => el.classList.add('prenovia-oculto'));
+    });
+  }
+  function mostrarCorazon() {
+    document.querySelectorAll('.prenovia-oculto').forEach((el) => el.classList.remove('prenovia-oculto'));
+  }
+
+  function medirTarjetaPrenovia() {
+    anchoP = tarjetaPrenovia.offsetWidth || 260;
+    altoP = tarjetaPrenovia.offsetHeight || 160;
+  }
+
+  function posicionInicialAleatoriaPrenovia() {
+    medirTarjetaPrenovia();
+    const maxX = Math.max(window.innerWidth - anchoP, 0);
+    xP = Math.random() * maxX;
+    tarjetaPrenovia.style.left = xP + 'px';
+    tarjetaPrenovia.style.top = (window.innerHeight * 0.35 + Math.random() * window.innerHeight * 0.25) + 'px';
+
+    const velocidad = 0.15 + Math.random() * 0.15;
+    const angulo = Math.random() * Math.PI * 2;
+    vxP = Math.cos(angulo) * velocidad;
+    vyP = Math.sin(angulo) * velocidad;
+  }
+
+  function iniciarDriftPrenovia() {
+    medirTarjetaPrenovia();
+    let posX = parseFloat(tarjetaPrenovia.style.left) || 0;
+    let posY = parseFloat(tarjetaPrenovia.style.top) || 0;
+
+    function paso() {
+      posX += vxP;
+      posY += vyP;
+
+      if (posX <= 0) { posX = 0; vxP *= -1; }
+      if (posX + anchoP >= window.innerWidth) { posX = window.innerWidth - anchoP; vxP *= -1; }
+      if (posY <= 0) { posY = 0; vyP *= -1; }
+      if (posY + altoP >= window.innerHeight) { posY = window.innerHeight - altoP; vyP *= -1; }
+
+      tarjetaPrenovia.style.left = posX + 'px';
+      tarjetaPrenovia.style.top = posY + 'px';
+
+      driftPrenovia = requestAnimationFrame(paso);
+    }
+    driftPrenovia = requestAnimationFrame(paso);
+  }
+
+  function detenerDriftPrenovia() {
+    if (driftPrenovia) cancelAnimationFrame(driftPrenovia);
+    driftPrenovia = null;
+  }
+
+  function ciclarAparicionPrenovia() {
+    posicionInicialAleatoriaPrenovia();
+    requestAnimationFrame(() => {
+      tarjetaPrenovia.classList.add('visible');
+    });
+
+    const t1 = setTimeout(() => {
+      iniciarDriftPrenovia();
+    }, 1450);
+
+    const tiempoVisible = 6000 + Math.random() * 5000;
+    const t2 = setTimeout(() => {
+      detenerDriftPrenovia();
+      tarjetaPrenovia.classList.remove('visible');
+
+      const tiempoEscondida = 2500 + Math.random() * 4000;
+      const t3 = setTimeout(ciclarAparicionPrenovia, tiempoEscondida);
+      cicloPrenoviaTimeouts.push(t3);
+    }, tiempoVisible);
+
+    cicloPrenoviaTimeouts.push(t1, t2);
+  }
+
+  function iniciarPrenovia() {
+    overlayPrenovia.style.display = 'block';
+    ocultarCorazon();
+    ciclarAparicionPrenovia();
+  }
+
+  function detenerPrenovia() {
+    overlayPrenovia.style.display = 'none';
+    detenerDriftPrenovia();
+    cicloPrenoviaTimeouts.forEach((id) => clearTimeout(id));
+    cicloPrenoviaTimeouts = [];
+    tarjetaPrenovia.classList.remove('visible');
+    mostrarCorazon();
   }
 })();
