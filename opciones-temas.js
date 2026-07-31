@@ -385,13 +385,22 @@
           En el suspiro de nuestro mundo soñado...<br>
          En aquello que a sido magnificado...<br>
          En el pensamiento de tu linda existencia...<br>
-         En mi prenovia... mi amada Princesa...
+         En mi Prenovia... mi amada Princesa...
         </p>
         <a class="link-holograma-tema" href="https://youtu.be/3LY99fAO8zE?si=SdWEefDWZtlfPU_l" target="_blank" rel="noopener noreferrer">Te dedico</a>
       </div>
     </div>
   `;
   document.body.appendChild(overlayPrenovia);
+
+const linkPrenovia = overlayPrenovia.querySelector('.link-holograma-tema');
+  if (linkPrenovia) {
+    linkPrenovia.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      window.open(linkPrenovia.href, '_blank', 'noopener,noreferrer');
+    }, { passive: false });
+  }
 
   /* ---------- 3. Abrir / cerrar el menú --------------------------------- */
   const botonMenu = document.getElementById('botonMenuTemas');
