@@ -56,21 +56,43 @@
     .boton-menu-temas {
       width: 42px;
       height: 42px;
-      border-radius: 6px;
-      background: rgba(0,0,0,0.6);
-      border: 1px solid #0ff;
       color: #0ff;
       font-size: 1.3rem;
       cursor: pointer;
       text-shadow: 0 0 6px #0ff;
-      box-shadow: 0 0 8px rgba(0,255,255,0.4);
+      background: transparent;   /* ← antes rgba(0,0,0,0.6), mejor transparente */
+      border: none;               /* ← ESTO es lo que te falta, quita el borde del navegador */
+      padding: 0;                 /* ← por si el botón le mete padding por defecto */
       transition: transform 0.15s ease, box-shadow 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .boton-menu-temas:hover,
     .boton-menu-temas:focus {
       transform: scale(1.05);
-      box-shadow: 0 0 16px rgba(0,255,255,0.8);
+      box-shadow: none;   /* ← esto también, si no querés glow cuadrado en hover */
       outline: none;
+    }
+
+    /* ---------- Icono geodésico (esfera wireframe) que gira ---------- */
+    .icono-esfera-geo {
+      width: 44px;
+      height: 44px;
+      display: block;
+      animation: girarIconoEsfera 9s linear infinite;
+      transform-origin: 50% 50%;
+      overflow: visible;
+    }
+    .icono-esfera-geo circle,
+    .icono-esfera-geo line,
+    .icono-esfera-geo ellipse {
+      stroke: #0ff;
+      filter: drop-shadow(0 0 3px rgba(0,255,255,0.7));
+    }
+    @keyframes girarIconoEsfera {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
     }
 
     .lista-temas {
@@ -349,13 +371,35 @@
   contenedorMenu.className = 'menu-temas';
   contenedorMenu.id = 'menuTemas';
   contenedorMenu.innerHTML = `
-    <button class="boton-menu-temas" id="botonMenuTemas" aria-haspopup="true" aria-expanded="false">☰</button>
+    <button class="boton-menu-temas" id="botonMenuTemas" aria-haspopup="true" aria-expanded="false">
+      <svg class="icono-esfera-geo" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="10" stroke-width="1.1"/>
+        <line x1="12" y1="2"  x2="19" y2="5"  stroke-width="0.9"/>
+        <line x1="19" y1="5"  x2="21" y2="12" stroke-width="0.9"/>
+        <line x1="21" y1="12" x2="19" y2="19" stroke-width="0.9"/>
+        <line x1="19" y1="19" x2="12" y2="22" stroke-width="0.9"/>
+        <line x1="12" y1="22" x2="5"  y2="19" stroke-width="0.9"/>
+        <line x1="5"  y1="19" x2="3"  y2="12" stroke-width="0.9"/>
+        <line x1="3"  y1="12" x2="5"  y2="5"  stroke-width="0.9"/>
+        <line x1="5"  y1="5"  x2="12" y2="2"  stroke-width="0.9"/>
+        <line x1="12" y1="2"  x2="12" y2="22" stroke-width="0.7"/>
+        <line x1="3"  y1="12" x2="21" y2="12" stroke-width="0.7"/>
+        <line x1="19" y1="5"  x2="5"  y2="19" stroke-width="0.7"/>
+        <line x1="19" y1="19" x2="5"  y2="5"  stroke-width="0.7"/>
+        <line x1="12" y1="2"  x2="21" y2="12" stroke-width="0.7"/>
+        <line x1="21" y1="12" x2="12" y2="22" stroke-width="0.7"/>
+        <line x1="12" y1="22" x2="3"  y2="12" stroke-width="0.7"/>
+        <line x1="3"  y1="12" x2="12" y2="2"  stroke-width="0.7"/>
+        <ellipse cx="12" cy="12" rx="10" ry="4" stroke-width="0.7"/>
+        <ellipse cx="12" cy="12" rx="4" ry="10" stroke-width="0.7"/>
+      </svg>
+    </button>
     <div class="lista-temas" id="listaTemas" role="menu">
       <div class="titulo-lista-temas">Conmemoraciones Inefarium</div>
-      <button class="opcion-tema" data-tema="lluvia"     role="menuitemradio">Lluvia de código</button>
-      <button class="opcion-tema" data-tema="escaner"    role="menuitemradio">Escáner láser</button>
-      <button class="opcion-tema" data-tema="grid"       role="menuitemradio">Grid neón</button>
-      <button class="opcion-tema" data-tema="particulas" role="menuitemradio">Partículas</button>
+      <button class="opcion-tema" data-tema="lluvia"     role="menuitemradio">Lluvia Codificada</button>
+      <button class="opcion-tema" data-tema="escaner"    role="menuitemradio">Escaner Holografico</button>
+      <button class="opcion-tema" data-tema="grid"       role="menuitemradio">Grid Neon</button>
+      <button class="opcion-tema" data-tema="particulas" role="menuitemradio">Particulas Etereas</button>
       <button class="opcion-tema" data-tema="prenovia"   role="menuitemradio">Mi Prenovia</button>
     </div>
   `;
@@ -430,10 +474,7 @@ const linkPrenovia = overlayPrenovia.querySelector('.link-holograma-tema');
     e.stopPropagation();
     alternarMenu();
   });
-  contenedorMenu.addEventListener('mouseenter', abrirMenu);
-  contenedorMenu.addEventListener('mouseleave', cerrarMenuConTolerancia);
-  listaTemas.addEventListener('mouseenter', abrirMenu);
-  listaTemas.addEventListener('mouseleave', cerrarMenuConTolerancia);
+  
 
   document.addEventListener('click', (e) => {
     if (!contenedorMenu.contains(e.target)) cerrarMenu();
@@ -478,12 +519,14 @@ const linkPrenovia = overlayPrenovia.querySelector('.link-holograma-tema');
         temaActivo = null;
         botonesOpcion.forEach((b) => b.classList.remove('activa'));
         apagarTodosLosEfectos();
+        cerrarMenu();  
         return;
       }
 
       temaActivo = tema;
       botonesOpcion.forEach((b) => b.classList.toggle('activa', b === btn));
       activarTema(tema);
+      cerrarMenu();  
     });
   });
 
