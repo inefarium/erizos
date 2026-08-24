@@ -401,6 +401,7 @@
       <button class="opcion-tema" data-tema="grid"       role="menuitemradio">Grid Neon</button>
       <button class="opcion-tema" data-tema="particulas" role="menuitemradio">Particulas Etereas</button>
       <button class="opcion-tema" data-tema="prenovia"   role="menuitemradio">Mi Prenovia</button>
+      <button class="opcion-tema" data-tema="libro" role="menuitemradio"> Paginas Cosmicas </button>
     </div>
   `;
   document.body.appendChild(contenedorMenu);
@@ -507,6 +508,8 @@ const linkPrenovia = overlayPrenovia.querySelector('.link-holograma-tema');
       overlayGrid.style.display = 'block';
     } else if (nombre === 'prenovia') {
       iniciarPrenovia();
+    } else if (nombre === 'libro') {
+       window.location.href = 'libro.html';
     }
   }
 
