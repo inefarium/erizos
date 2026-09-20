@@ -8,20 +8,25 @@
      <script src="opciones-temas.js"></script>
      <script src="regalo-cosmico.js"></script>
 
-   Comportamiento:
-   - El regalo aparece en un lugar aleatorio (detrás del texto), mas
-     grande que antes y girando en 3D de verdad (dos caras identicas
-     pegadas espalda con espalda, cada una con backface-visibility
-     oculta: mientras una mira al frente la otra queda escondida, asi
-     el giro se ve solido en vez de "aplastarse" como pasa al rotar
-     una imagen plana).
-   - 1er toque SOBRE el regalo: se abre, salen chispas estilo cyberpunk
-     (glifos tipo matrix, pixeles y rombos holograficos) y ~8
-     explosiones repartidas por TODA la pantalla, y se despliega la
-     hojita con la frase (las frases se editan en FRASES_REGALO).
+   Comportamiento (igual que antes):
+   - El regalo aparece en un lugar aleatorio (detrás del texto).
+   - 1er toque SOBRE el regalo: se abre, salen chispas y ~8 explosiones
+     repartidas por TODA la pantalla, y se despliega la hojita con la frase
+     (las frases se editan en FRASES_REGALO).
    - Mientras está abierto: un toque EN CUALQUIER LUGAR de la pantalla
      lo pliega y lo hace reaparecer cerrado en otro lugar.
-   - Ya no tiene la sombra/reflejo elíptico del piso.
+
+   CAMBIOS DE ESTA VERSION
+   - El regalo ya NO es un SVG plano girando. Ahora es un modelo 3D real
+     (vertices + rotacion + perspectiva) dibujado en un <canvas> como
+     wireframe holografico neon. Gira sobre su propio eje vertical, se ve
+     la caja por todos sus lados, y la tapa + lazo se levantan en 3D.
+     (El giro anterior no era 3D porque `opacity` y `filter` animados sobre
+     un elemento con transform-style: preserve-3d lo APLANAN.)
+   - Particulas con el look de la pagina: SOLO cian #0ff y magenta #ff00c8
+     (sin azul/lila), puntos-estrella como el fondo, destellos ✦ como los
+     del corazon, glifos de codigo en Courier New con desdoblado RGB
+     (glitch), y anillos elipticos como la orbita del corazon.
    ===================================================================== */
 
 (function () {
@@ -45,14 +50,13 @@
     .regalo-cosmico-tema {
       position: fixed;
       left: 0; top: 0;                       /* JS lo mueve con left/top */
-      width: clamp(180px, 36vmin, 280px);     /* mas grande que antes */
+      width: clamp(240px, 50vmin, 400px);     /* TAMAÑO DE LA CAJITA: sube/baja estos 3 valores */
       margin: 0; padding: 0;
       border: none;
       background: transparent;
       cursor: pointer;
       touch-action: manipulation;
       z-index: 4;
-      perspective: 900px;
       /* Estado oculto: se "materializa" al agregar .visible */
       opacity: 0;
       transform: scale(0.3);
@@ -71,7 +75,6 @@
 
     .flota-regalo-tema {
       display: block;
-      transform-style: preserve-3d;   /* deja pasar la perspectiva del boton hasta .regalo-3d-giro */
       animation: flotarRegalo 3.6s ease-in-out infinite;
     }
     @keyframes flotarRegalo {
@@ -79,105 +82,27 @@
       50%      { transform: translateY(-8px); }
     }
 
-    /* Giro 3D REAL y HOLOGRAFICO: dos caras identicas (regalo-cara-a / -b)
-       pegadas espalda con espalda dentro de un contenedor preserve-3d que
-       gira en rotateY. Cada cara tiene backface-visibility: hidden, asi que
-       cuando una queda "de espaldas" a la camara desaparece y aparece
-       la otra ya de frente: el giro se ve solido, no una imagen plana
-       aplastandose. Encima se le suma un barrido de lineas de escaneo y un
-       leve pulso de transparencia/color para que, ademas de girar en 3D,
-       se LEA como una proyeccion holografica y no como un objeto solido. */
-    .regalo-3d-giro {
-      position: relative;
-      display: block;
-      transform-style: preserve-3d;
-      animation: girarRegalo3D 9s linear infinite, pulsoHologramaRegalo 2.4s ease-in-out infinite;
-    }
-    @keyframes girarRegalo3D {
-      from { transform: rotateY(0deg); }
-      to   { transform: rotateY(360deg); }
-    }
-    @keyframes pulsoHologramaRegalo {
-      0%, 100% { opacity: 0.92; filter: hue-rotate(0deg); }
-      50%      { opacity: 1;    filter: hue-rotate(8deg); }
-    }
-    /* Barrido de lineas de escaneo sobre el regalo (mismo lenguaje visual
-       que la hojita), pegado al giro para que viaje "con" el objeto */
-    .regalo-3d-giro::before {
-      content: "";
-      position: absolute;
-      inset: -6% -14%;
-      background: repeating-linear-gradient(0deg, rgba(120,220,255,0.10) 0, rgba(120,220,255,0.10) 1px, transparent 2px, transparent 4px);
-      mix-blend-mode: screen;
-      animation: barridoRegalo3D 3.2s linear infinite;
-      pointer-events: none;
-      z-index: 3;
-    }
-    @keyframes barridoRegalo3D {
-      0%   { transform: translateY(-8%); opacity: 0.35; }
-      50%  { opacity: 0.7; }
-      100% { transform: translateY(8%); opacity: 0.35; }
-    }
-    .regalo-cara {
-      display: block;
-      opacity: 0.94;
-      backface-visibility: hidden;
-      -webkit-backface-visibility: hidden;
-    }
-    .regalo-cara-b {
-      position: absolute;
-      inset: 0;
-      transform: rotateY(180deg);
-    }
-
-    .regalo-cosmico-tema svg {
+    /* El regalo es un modelo 3D dibujado en canvas (ver MOTOR 3D mas abajo).
+       Todo el 3D vive DENTRO del canvas, asi que ya no hay preserve-3d ni
+       backface-visibility que se rompan por animar opacity/filter. */
+    .regalo-lienzo3d {
       display: block;
       width: 100%;
       height: auto;
-      overflow: visible;
+      aspect-ratio: 1 / 1;
       filter: drop-shadow(0 0 10px rgba(255,140,30,0.35)) drop-shadow(0 0 26px rgba(57,168,255,0.28));
       animation: parpadeoHolograma 4.2s infinite;
     }
-    .regalo-cosmico-tema:hover svg {
+    .regalo-cosmico-tema:hover .regalo-lienzo3d {
       filter: drop-shadow(0 0 14px rgba(255,140,30,0.6)) drop-shadow(0 0 30px rgba(57,168,255,0.45));
     }
-    .regalo-cosmico-tema.pop svg {
+    .regalo-cosmico-tema.pop .regalo-lienzo3d {
       animation: popRegalo 0.4s ease-out, parpadeoHolograma 4.2s infinite;
     }
     @keyframes popRegalo {
       0%   { transform: scale(1); }
       40%  { transform: scale(1.12) rotate(-2deg); }
       100% { transform: scale(1); }
-    }
-
-    /* Lineas neon del SVG del regalo */
-    .rg-l  { fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-    .rg-lf { stroke-width: 1.2; }               /* lineas finas (cintas) */
-    .rg-lo { stroke: #ff8a1f; }                 /* naranja */
-    .rg-la { stroke: #ffc21a; }                 /* ambar */
-    .rg-lb { stroke: #39a8ff; }                 /* azul */
-    .rg-lc { stroke: #9fdcff; }                 /* celeste claro (lazo) */
-
-    /* Tapa: se cierra rapido, se abre con rebote */
-    .rg-tapa {
-      transform-box: fill-box;
-      transform-origin: 50% 100%;
-      transition: transform 0.35s ease-in;
-    }
-    .regalo-cosmico-tema.abierto .rg-tapa {
-      transform: translate(10px, -46px) rotate(9deg);
-      transition: transform 0.8s cubic-bezier(0.3, 1.6, 0.5, 1);
-    }
-
-    /* Haz de luz que sale de la caja */
-    .rg-luz { opacity: 0; transition: opacity 0.6s ease; }
-    .regalo-cosmico-tema.abierto .rg-luz {
-      opacity: 1;
-      animation: pulsoLuzRegalo 1.6s ease-in-out infinite alternate;
-    }
-    @keyframes pulsoLuzRegalo {
-      from { opacity: 0.72; }
-      to   { opacity: 1; }
     }
 
     /* ----- La hojita con la frase -----
@@ -188,7 +113,7 @@
     .hoja-regalo-tema {
       position: fixed;
       left: 0; top: 0;
-      width: clamp(210px, 72vw, 290px);
+      width: clamp(240px, 84vw, 380px);     /* ANCHO DE LA NOTITA: sube/baja estos 3 valores */
       z-index: 8;
       visibility: hidden;
       pointer-events: none;
@@ -296,9 +221,24 @@
       margin-top: 0.9em;
       font-size: 0.72rem;
       color: #0ff;
-      opacity: 0.75;
-      text-align: right;
+      text-align: center;                       /* URL al medio de la notita */
       letter-spacing: 1px;
+      overflow-wrap: anywhere;                  /* una URL larga no se sale de la notita */
+    }
+    .rg-hoja-firma a {
+      display: inline-block;
+      padding: 0.4em 0.5em;                     /* area de toque comoda en celular */
+      color: #0ff;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      text-shadow: 0 0 6px #0ff;
+      cursor: pointer;
+    }
+    .rg-hoja-firma a:hover,
+    .rg-hoja-firma a:focus-visible {
+      color: #fff;
+      text-shadow: 0 0 6px #0ff, 0 0 14px #0ff;
+      outline: none;
     }
 
     /* Canvas de los fuegos artificiales (encima del texto, sin capturar clicks) */
@@ -310,116 +250,13 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .flota-regalo-tema, .regalo-3d-giro, .regalo-cosmico-tema svg, .rg-hoja-cara,
-      .rg-hoja-cara::before, .rg-barrido, .regalo-3d-giro::before,
-      .regalo-cosmico-tema.abierto .rg-luz { animation: none; }
-      .rg-tapa, .regalo-cosmico-tema.abierto .rg-tapa { transition-duration: 0.01s; }
+      .rg-hoja-cara,
+      .rg-hoja-cara::before, .rg-barrido { animation: none; }
     }
   `;
   document.head.appendChild(estilos);
 
-  /* ---------- 2. HTML: canvas de fuegos + regalo (2 caras SVG) + hojita -
-     La caja se repite dos veces (cara A y cara B) con los MISMOS dibujos
-     pero ids de <defs> distintos (sufijo "B" en la segunda) para que no
-     colisionen los url(#...) dentro del mismo documento. Se le quito la
-     elipse de reflejo/sombra del piso que tenia antes. */
-  const cajaRegaloSVG = (sufijo) => `
-    <svg viewBox="0 -10 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <defs>
-        <filter id="rgNeon${sufijo}" filterUnits="userSpaceOnUse" x="-20" y="-40" width="240" height="280">
-          <feGaussianBlur in="SourceGraphic" stdDeviation="1.6" result="b1"/>
-          <feGaussianBlur in="SourceGraphic" stdDeviation="4.5" result="b2"/>
-          <feMerge>
-            <feMergeNode in="b2"/>
-            <feMergeNode in="b1"/>
-            <feMergeNode in="SourceGraphic"/>
-          </feMerge>
-        </filter>
-        <linearGradient id="rgLuz${sufijo}" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0"    stop-color="#ffe08a" stop-opacity="0.85"/>
-          <stop offset="0.45" stop-color="#39a8ff" stop-opacity="0.28"/>
-          <stop offset="1"    stop-color="#ff00c8" stop-opacity="0"/>
-        </linearGradient>
-        <radialGradient id="rgBoca${sufijo}">
-          <stop offset="0"   stop-color="#fff2b0" stop-opacity="0.95"/>
-          <stop offset="0.5" stop-color="#ffa030" stop-opacity="0.45"/>
-          <stop offset="1"   stop-color="#ff8a1f" stop-opacity="0"/>
-        </radialGradient>
-        <linearGradient id="rgIzq${sufijo}" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stop-color="#0d1a3d"/>
-          <stop offset="1" stop-color="#070b1c"/>
-        </linearGradient>
-        <linearGradient id="rgDer${sufijo}" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stop-color="#160a05"/>
-          <stop offset="1" stop-color="#2a1205"/>
-        </linearGradient>
-      </defs>
-
-      <!-- Interior de la caja (paredes del fondo) -->
-      <polygon points="100,66 40,96 40,150 100,120"  fill="#3a1a06"/>
-      <polygon points="100,66 160,96 160,150 100,120" fill="#4a230a"/>
-
-      <!-- Luz que sale al abrir -->
-      <g class="rg-luz">
-        <polygon points="48,110 152,110 128,-10 72,-10" fill="url(#rgLuz${sufijo})"/>
-        <ellipse cx="100" cy="96" rx="54" ry="25" fill="url(#rgBoca${sufijo})"/>
-      </g>
-
-      <!-- CUERPO: caras -->
-      <polygon points="40,96 100,126 100,180 40,150"   fill="url(#rgIzq${sufijo})"/>
-      <polygon points="100,126 160,96 160,150 100,180" fill="url(#rgDer${sufijo})"/>
-      <polygon points="63,107.5 77,114.5 77,168.5 63,161.5"     fill="rgba(57,168,255,0.16)"/>
-      <polygon points="123,114.5 137,107.5 137,161.5 123,168.5" fill="rgba(255,138,31,0.16)"/>
-      <!-- CUERPO: lineas neon -->
-      <g filter="url(#rgNeon${sufijo})">
-        <polyline class="rg-l rg-lo" points="40,96 100,66 160,96"/>
-        <polyline class="rg-l rg-lo" points="40,96 100,126 160,96"/>
-        <line class="rg-l rg-lo" x1="40"  y1="96"  x2="40"  y2="150"/>
-        <line class="rg-l rg-lo" x1="160" y1="96"  x2="160" y2="150"/>
-        <line class="rg-l rg-lb" x1="100" y1="126" x2="100" y2="180"/>
-        <polyline class="rg-l rg-la" points="40,150 100,180 160,150"/>
-        <line class="rg-l rg-lf rg-lb" x1="63"  y1="107.5" x2="63"  y2="161.5"/>
-        <line class="rg-l rg-lf rg-lb" x1="77"  y1="114.5" x2="77"  y2="168.5"/>
-        <line class="rg-l rg-lf rg-lo" x1="123" y1="114.5" x2="123" y2="168.5"/>
-        <line class="rg-l rg-lf rg-lo" x1="137" y1="107.5" x2="137" y2="161.5"/>
-      </g>
-
-      <!-- TAPA (con el lazo): es lo que vuela al abrir -->
-      <g class="rg-tapa">
-        <polygon points="40,80 100,110 100,126 40,96"   fill="url(#rgIzq${sufijo})"/>
-        <polygon points="100,110 160,80 160,96 100,126" fill="url(#rgDer${sufijo})"/>
-        <polygon points="100,50 160,80 100,110 40,80"   fill="#100c14"/>
-        <polygon points="137,68.5 77,98.5 63,91.5 123,61.5" fill="rgba(57,168,255,0.16)"/>
-        <polygon points="77,61.5 137,91.5 123,98.5 63,68.5" fill="rgba(57,168,255,0.16)"/>
-        <polygon points="63,91.5 77,98.5 77,114.5 63,107.5"     fill="rgba(57,168,255,0.16)"/>
-        <polygon points="123,98.5 137,91.5 137,107.5 123,114.5" fill="rgba(255,138,31,0.16)"/>
-        <g filter="url(#rgNeon${sufijo})">
-          <polygon class="rg-l rg-la" points="100,50 160,80 100,110 40,80"/>
-          <line class="rg-l rg-lo" x1="40"  y1="80"  x2="40"  y2="96"/>
-          <line class="rg-l rg-lo" x1="160" y1="80"  x2="160" y2="96"/>
-          <line class="rg-l rg-lb" x1="100" y1="110" x2="100" y2="126"/>
-          <polyline class="rg-l rg-lo" points="40,96 100,126 160,96"/>
-          <line class="rg-l rg-lf rg-lb" x1="137" y1="68.5" x2="77"  y2="98.5"/>
-          <line class="rg-l rg-lf rg-lb" x1="123" y1="61.5" x2="63"  y2="91.5"/>
-          <line class="rg-l rg-lf rg-lb" x1="77"  y1="61.5" x2="137" y2="91.5"/>
-          <line class="rg-l rg-lf rg-lb" x1="63"  y1="68.5" x2="123" y2="98.5"/>
-          <line class="rg-l rg-lf rg-lb" x1="63"  y1="91.5" x2="63"  y2="107.5"/>
-          <line class="rg-l rg-lf rg-lb" x1="77"  y1="98.5" x2="77"  y2="114.5"/>
-          <line class="rg-l rg-lf rg-lo" x1="123" y1="98.5" x2="123" y2="114.5"/>
-          <line class="rg-l rg-lf rg-lo" x1="137" y1="91.5" x2="137" y2="107.5"/>
-          <!-- lazo -->
-          <path class="rg-l rg-lc" fill="rgba(57,168,255,0.10)" d="M100 74 C82 46, 56 52, 68 66 C75 74, 92 78, 100 74 Z"/>
-          <path class="rg-l rg-lc" fill="rgba(57,168,255,0.10)" d="M100 74 C118 46, 144 52, 132 66 C125 74, 108 78, 100 74 Z"/>
-          <path class="rg-l rg-lf rg-lb" d="M100 72 C88 56, 74 57, 76 65"/>
-          <path class="rg-l rg-lf rg-lb" d="M100 72 C112 56, 126 57, 124 65"/>
-          <path class="rg-l rg-lf rg-lc" d="M97 78 C92 86, 86 90, 80 90"/>
-          <path class="rg-l rg-lf rg-lc" d="M103 78 C108 86, 114 90, 120 90"/>
-          <ellipse class="rg-l rg-lc" cx="100" cy="75" rx="5" ry="3.5"/>
-        </g>
-      </g>
-    </svg>
-  `;
-
+  /* ---------- 2. HTML: canvas de fuegos + regalo (canvas 3D) + hojita --- */
   const overlayRegalo = document.createElement('div');
   overlayRegalo.className = 'overlay-regalo';
   overlayRegalo.id = 'overlayRegalo';
@@ -428,10 +265,7 @@
 
     <button class="regalo-cosmico-tema" id="regaloCosmicoTema" type="button" aria-label="Abrir regalo cosmico">
       <span class="flota-regalo-tema">
-        <span class="regalo-3d-giro">
-          <span class="regalo-cara regalo-cara-a">${cajaRegaloSVG('')}</span>
-          <span class="regalo-cara regalo-cara-b">${cajaRegaloSVG('B')}</span>
-        </span>
+        <canvas class="regalo-lienzo3d" id="regaloLienzo3D" width="300" height="300" aria-hidden="true"></canvas>
       </span>
     </button>
 
@@ -439,9 +273,9 @@
       <div class="rg-hoja">
         <div class="rg-hoja-cara">
           <div class="rg-barrido"></div>
-          <h2 class="rg-hoja-titulo">✦ MENSAJE CÓSMICO ✦</h2>
+          <h2 class="rg-hoja-titulo">✦ FELIZ CUMPLEAÑOS MI AMOR ✦</h2>
           <p class="rg-hoja-frase" id="hojaRegaloFrase"></p>
-          <div class="rg-hoja-firma">toca para otro regalo ✦</div>
+          <div class="rg-hoja-firma">✦ <a href="https://n9.cl/qi0m5b" target="_blank" rel="noopener noreferrer">https://n9.cl/qi0m5b</a> ✦</div>
         </div>
       </div>
     </div>
@@ -458,18 +292,17 @@
   /* ★ FRASES DEL REGALO  ← EDITA ESTA LISTA CON TUS PROPIAS FRASES
      Salen en orden aleatorio y no se repiten hasta usarlas todas. */
   const FRASES_REGALO = [
-    'En este mundo de tibios, tú eres mi chispa favorita.',
-    'Si las estrellas supieran cómo brillas, se apagarían de envidia.',
-    'Guardé un pedacito de galaxia para dártelo hoy.',
-    'Eres mi coincidencia más hermosa en todo el cosmos.',
-    'Entre tanto ruido, encontré mi frecuencia favorita: tú.',
-    'Hoy el universo conspira para que sonrías.',
-    'Mereces un mundo entero, pero por ahora te regalo este destello.',
-    'Cada latido mío viaja años luz solo para llegar a ti.',
-    'Somos polvo de estrellas, y tú eres la parte que más brilla.',
-    'Un deseo, una chispa, un mundo soñado. Todo empieza contigo.',
-    'Aunque el mundo esté tibio, a tu lado me erizo de alegría.',
-    'Abre el regalo, abre el corazón: el cosmos sabe lo que hace.'
+    'En este mundo de humo, eres mi piedrita filosofal',
+    'Cuando miro a la luna, veo tu luz, quiza quiera darme el mensaje de cuanto brillas',
+    'El dia C de cuando lo nostalgico se volvio magico',
+    'Mi vida... Mi lugar seguro... Mi sentido de existencia...',
+    'INEFARIUM CELEBRA, PEDRO EMPIEZA A SALTAR DE EMOCION!!!',
+    'Michitos se acercan a ti y te daran muchos muacks :3',
+    'Vesiculin empieza a girar y volar por toda Arcelum (se perdio del camino xD)',
+    'LORD WEEDESTON EMPEZO A REGALAR HONGUITOS A TODOS POR LA CELEBRACION!!',
+    'Somos polvo de estrellas, y atomos encontrados',
+    'LAS VAQUITAS POLACAS SE LIBERARON, BAILARAN POR TU NOMBRE',
+    'Una cancion en mi alma, como el pensamiento de voz en mi mente💕'
   ];
 
   const regaloCosmico = overlayRegalo.querySelector('#regaloCosmicoTema');
@@ -477,6 +310,8 @@
   const fraseRegalo   = overlayRegalo.querySelector('#hojaRegaloFrase');
   const canvasRegalo  = overlayRegalo.querySelector('#canvasRegaloCosmico');
   const ctxRegalo     = canvasRegalo.getContext('2d');
+  const lienzoCaja    = overlayRegalo.querySelector('#regaloLienzo3D');
+  const ctxCaja       = lienzoCaja.getContext('2d');
   const contenedorMenu = window.OpcionesTemas.contenedorMenu;
 
   const TAU = Math.PI * 2;
@@ -505,6 +340,517 @@
   function siguienteFraseRegalo() {
     if (!mazoRegalo.length) mazoRegalo = FRASES_REGALO.slice().sort(() => Math.random() - 0.5);
     return mazoRegalo.pop();
+  }
+
+  /* =====================================================================
+     SONIDO COSMICO AL ABRIR  (Web Audio: se sintetiza, sin archivos de audio)
+     -----------------------------------------------------------------
+     Suena cada vez que se abre la caja (~2.5 s). Capas:
+       1) "zap" de desbloqueo: barrido de sierra filtrado + ruido glitch
+       2) golpe grave suave (sub) para dar cuerpo al abrir
+       3) chirridos digitales cortitos (cuadradas agudas)
+       4) colchon etereo: acorde La menor add9 con filtro que se abre y cierra
+       5) arpegio de destellos ascendente (pentatonica menor), distinto cada vez
+       6) campanita final con vibrato
+     Todo pasa por reverb + eco con lowpass para que se sienta amplio/espacial.
+     Ajustes:
+       SONIDO_REGALO_ACTIVO     -> false para silenciar todo
+       VOLUMEN_SONIDO_REGALO    -> 0 a 1
+     Los navegadores solo dejan sonar audio tras un toque del usuario; como
+     la caja se abre con un toque, el audio se crea/reanuda justo ahi.
+     Si algo falla, el regalo sigue funcionando sin sonido (try/catch).
+     ===================================================================== */
+  const SONIDO_REGALO_ACTIVO = true;
+  const VOLUMEN_SONIDO_REGALO = 0.5;
+  let audioRegalo = null, reverbRegalo = null, ruidoRegalo = null, maestroSonidoRegalo = null;
+
+  function contextoAudioRegalo() {
+    if (audioRegalo) return audioRegalo;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { audioRegalo = new AC(); } catch (err) { audioRegalo = null; }
+    return audioRegalo;
+  }
+
+  /* Reverb generada (ruido que decae): cola de ~2.6 s, estereo */
+  function crearReverbRegalo(ac) {
+    const n = Math.floor(ac.sampleRate * 2.6);
+    const buf = ac.createBuffer(2, n, ac.sampleRate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.6);
+    }
+    return buf;
+  }
+
+  function sonidoAbrirRegalo() {
+    if (!SONIDO_REGALO_ACTIVO) return;
+    try {
+      const ac = contextoAudioRegalo();
+      if (!ac) return;
+      if (ac.state === 'suspended') ac.resume();
+      const t0 = ac.currentTime + 0.03;
+      const rnd = (a, b) => a + Math.random() * (b - a);
+
+      // --- Cadena: fuentes -> bus -> (seco + reverb + eco) -> maestro -> compresor -> salida
+      const maestro = ac.createGain();
+      maestro.gain.value = VOLUMEN_SONIDO_REGALO * 0.6;
+      const comp = ac.createDynamicsCompressor();
+      comp.threshold.value = -18;
+      comp.ratio.value = 4;
+      maestro.connect(comp);
+      comp.connect(ac.destination);
+      maestroSonidoRegalo = maestro;
+
+      if (!reverbRegalo) reverbRegalo = crearReverbRegalo(ac);
+      const rev = ac.createConvolver();
+      rev.buffer = reverbRegalo;
+      const revNivel = ac.createGain();
+      revNivel.gain.value = 0.7;
+      rev.connect(revNivel);
+      revNivel.connect(maestro);
+
+      const eco = ac.createDelay(1);
+      eco.delayTime.value = 0.21;
+      const ecoFb = ac.createGain();
+      ecoFb.gain.value = 0.4;
+      const ecoFiltro = ac.createBiquadFilter();
+      ecoFiltro.type = 'lowpass';
+      ecoFiltro.frequency.value = 2400;
+      eco.connect(ecoFiltro);
+      ecoFiltro.connect(ecoFb);
+      ecoFb.connect(eco);
+      const ecoNivel = ac.createGain();
+      ecoNivel.gain.value = 0.45;
+      ecoFiltro.connect(ecoNivel);
+      ecoNivel.connect(maestro);
+      ecoFiltro.connect(rev);
+
+      const bus = ac.createGain();            // todo lo "aereo" pasa por aqui
+      bus.connect(maestro);
+      bus.connect(rev);
+      bus.connect(eco);
+
+      // Ruido blanco corto (para el glitch)
+      if (!ruidoRegalo) {
+        const n = Math.floor(ac.sampleRate * 0.2);
+        ruidoRegalo = ac.createBuffer(1, n, ac.sampleRate);
+        const d = ruidoRegalo.getChannelData(0);
+        for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      }
+
+      // Voz simple: oscilador con envolvente (ataque rapido, caida exponencial)
+      const voz = (tipo, f0, f1, ini, dur, vol, ataque, destino) => {
+        const o = ac.createOscillator(), g = ac.createGain();
+        o.type = tipo;
+        o.frequency.setValueAtTime(f0, t0 + ini);
+        if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t0 + ini + dur);
+        g.gain.setValueAtTime(0.0001, t0 + ini);
+        g.gain.exponentialRampToValueAtTime(vol, t0 + ini + ataque);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + ini + dur);
+        o.connect(g);
+        g.connect(destino || bus);
+        o.start(t0 + ini);
+        o.stop(t0 + ini + dur + 0.05);
+        return { o, g };
+      };
+
+      // 1) Golpe grave suave (va directo al maestro, sin reverb)
+      voz('sine', 120, 42, 0, 0.45, 0.5, 0.01, maestro);
+
+      // 2) "Zap" de desbloqueo: sierra que sube, filtrada
+      {
+        const o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+        o.type = 'sawtooth';
+        o.frequency.setValueAtTime(160, t0);
+        o.frequency.exponentialRampToValueAtTime(2400, t0 + 0.3);
+        f.type = 'bandpass';
+        f.Q.value = 6;
+        f.frequency.setValueAtTime(400, t0);
+        f.frequency.exponentialRampToValueAtTime(4200, t0 + 0.3);
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.16, t0 + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.34);
+        o.connect(f); f.connect(g); g.connect(bus);
+        o.start(t0);
+        o.stop(t0 + 0.4);
+      }
+
+      // 3) Glitch de ruido (dos ráfagas digitales)
+      const glitch = (ini, dur, vol) => {
+        const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+        s.buffer = ruidoRegalo;
+        f.type = 'highpass';
+        f.frequency.value = 4000;
+        g.gain.setValueAtTime(vol, t0 + ini);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + ini + dur);
+        s.connect(f); f.connect(g); g.connect(bus);
+        s.start(t0 + ini);
+        s.stop(t0 + ini + dur + 0.02);
+      };
+      glitch(0.0, 0.10, 0.12);
+      glitch(0.19, 0.05, 0.07);
+
+      // 4) Chirridos digitales cortitos
+      for (let i = 0; i < 4; i++) {
+        voz('square', rnd(1800, 3800), rnd(1800, 3800), 0.03 + i * 0.09 + rnd(0, 0.04), 0.035, 0.02, 0.004);
+      }
+
+      // 5) Colchon etereo: La menor add9 (A2, E3, C4) con filtro que se abre y se cierra
+      {
+        const filtro = ac.createBiquadFilter();
+        filtro.type = 'lowpass';
+        filtro.Q.value = 2;
+        filtro.frequency.setValueAtTime(250, t0);
+        filtro.frequency.exponentialRampToValueAtTime(3200, t0 + 0.9);
+        filtro.frequency.exponentialRampToValueAtTime(700, t0 + 2.4);
+        const g = ac.createGain();
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.exponentialRampToValueAtTime(0.04, t0 + 0.5);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 2.6);
+        filtro.connect(g);
+        g.connect(bus);
+        [[110, -7], [110, 7], [164.81, -5], [164.81, 5], [261.63, 0]].forEach((n) => {
+          const o = ac.createOscillator();
+          o.type = n[0] > 200 ? 'triangle' : 'sawtooth';
+          o.frequency.value = n[0];
+          o.detune.value = n[1];
+          o.connect(filtro);
+          o.start(t0);
+          o.stop(t0 + 2.7);
+        });
+      }
+
+      // 6) Arpegio de destellos ascendente (pentatonica menor de La), distinto cada vez
+      const escala = [440, 523.25, 587.33, 659.25, 783.99, 880, 1046.5, 1318.5, 1567.98, 1760];
+      const inicio = (Math.random() * 3) | 0;
+      for (let i = 0; i < 7; i++) {
+        voz(i % 2 ? 'sine' : 'triangle', escala[inicio + i], 0, 0.14 + i * 0.075 + rnd(0, 0.012), 1.1, 0.06 - i * 0.003, 0.008);
+      }
+
+      // 7) Campanita final con vibrato
+      {
+        const fb = escala[7 + ((Math.random() * 3) | 0)];
+        const campana = voz('sine', fb, 0, 0.5, 1.9, 0.04, 0.2);
+        const lfo = ac.createOscillator(), lfoG = ac.createGain();
+        lfo.frequency.value = 5.5;
+        lfoG.gain.value = fb * 0.006;
+        lfo.connect(lfoG);
+        lfoG.connect(campana.o.frequency);
+        lfo.start(t0 + 0.5);
+        lfo.stop(t0 + 2.5);
+      }
+
+      // Limpieza: suelta la cadena cuando ya no suena nada (incluida la cola de reverb)
+      setTimeout(() => {
+        try { maestro.disconnect(); } catch (err) { /* ya desconectado */ }
+        if (maestroSonidoRegalo === maestro) maestroSonidoRegalo = null;
+      }, 6000);
+    } catch (err) {
+      console.warn('[regalo-cosmico] sonido no disponible:', err);
+    }
+  }
+
+  /* Corta el sonido con un fundido rapido (al apagar el tema) */
+  function silenciarSonidoRegalo() {
+    if (!maestroSonidoRegalo || !audioRegalo) return;
+    try { maestroSonidoRegalo.gain.setTargetAtTime(0, audioRegalo.currentTime, 0.04); } catch (err) { /* nada */ }
+  }
+
+  /* =====================================================================
+     MOTOR 3D DEL REGALO  (canvas 2D + proyeccion propia, sin librerias)
+     -----------------------------------------------------------------
+     Es un modelo 3D REAL: cada punto tiene (x, y, z) y en cada cuadro se
+       1) rota sobre el eje Y (el giro sobre su propio eje),
+       2) se inclina la camara un poco hacia abajo (para ver la tapa),
+       3) se aplica perspectiva y se dibuja como wireframe neon.
+     Las aristas del fondo se atenuan segun su profundidad, asi se lee
+     como una proyeccion holografica con volumen.
+
+     Ajustes rapidos:
+       VEL_GIRO_REGALO   -> radianes/seg (0.7 = una vuelta cada ~9 s)
+       INCLINACION_REGALO-> cuanto se ve "desde arriba" (radianes)
+       ALTURA_TAPA_REGALO-> cuanto sube la tapa al abrir
+     ===================================================================== */
+  const VEL_GIRO_REGALO = 0.7;
+  const INCLINACION_REGALO = 0.42;
+  const ALTURA_TAPA_REGALO = 0.75;
+  const DIST_CAMARA_REGALO = 7;        // distancia de camara (perspectiva suave)
+  const COL_REGALO = {                 // paleta neon original del regalo
+    o: [255, 138, 31],                 // naranja
+    a: [255, 194, 26],                 // ambar
+    b: [57, 168, 255],                 // azul
+    c: [159, 220, 255]                 // celeste (lazo)
+  };
+
+  /* ---- Geometria: cuerpo (fijo) y tapa+lazo (grupo que se levanta) ---- */
+  const MODELO_REGALO = (function () {
+    const BX = 0.8, Y0 = -0.9, Y1 = 0.3;   // cuerpo: semi-ancho y rango vertical
+    const LX = 0.9, LH = 0.16;              // tapa: semi-ancho y semi-alto (coords locales, centrada)
+    const CINTA = 0.14;                     // semi-ancho de la cinta
+
+    const cuerpo = { caras: [], lineas: [] };
+    const tapa   = { caras: [], lineas: [] };
+
+    const linea = (g, pts, col, fino, cerrado) => g.lineas.push({ p: pts, col, fino: !!fino, cerrado: !!cerrado });
+    const cara  = (g, pts, n, col, a) => g.caras.push({ p: pts, n, col, a });
+
+    function aristasCaja(g, hx, y0, y1, hz, cTop, cBase, cVert) {
+      const A = [[-hx, y0, -hz], [hx, y0, -hz], [hx, y0, hz], [-hx, y0, hz]];
+      const B = [[-hx, y1, -hz], [hx, y1, -hz], [hx, y1, hz], [-hx, y1, hz]];
+      linea(g, B, cTop, false, true);
+      linea(g, A, cBase, false, true);
+      for (let i = 0; i < 4; i++) linea(g, [A[i], B[i]], cVert[i]);
+    }
+
+    /* 4 lados con su cinta (banda tenue + 2 lineas finas). ±Z azul, ±X naranja */
+    function lados(g, h, y0, y1, aCara, aBanda) {
+      [[0, 1, 'b'], [0, -1, 'b'], [1, 0, 'o'], [-1, 0, 'o']].forEach((d) => {
+        const nx = d[0], nz = d[1], col = d[2];
+        const tx = nz, tz = -nx;
+        const P = (s, y) => [nx * h + tx * s, y, nz * h + tz * s];
+        cara(g, [P(-h, y0), P(h, y0), P(h, y1), P(-h, y1)], [nx, 0, nz], col, aCara);
+        cara(g, [P(-CINTA, y0), P(CINTA, y0), P(CINTA, y1), P(-CINTA, y1)], [nx, 0, nz], col, aBanda);
+        linea(g, [P(-CINTA, y0), P(-CINTA, y1)], col, true);
+        linea(g, [P(CINTA, y0), P(CINTA, y1)], col, true);
+      });
+    }
+
+    /* --- Cuerpo --- */
+    lados(cuerpo, BX, Y0, Y1, 0.20, 0.30);
+    cara(cuerpo, [[-BX, Y0, -BX], [BX, Y0, -BX], [BX, Y0, BX], [-BX, Y0, BX]], [0, -1, 0], 'a', 0.10);
+    aristasCaja(cuerpo, BX, Y0, Y1, BX, 'o', 'a', ['o', 'b', 'o', 'b']);
+
+    /* --- Tapa --- */
+    lados(tapa, LX, -LH, LH, 0.20, 0.30);
+    cara(tapa, [[-LX, LH, -LX], [LX, LH, -LX], [LX, LH, LX], [-LX, LH, LX]], [0, 1, 0], 'a', 0.12);
+    cara(tapa, [[-LX, -LH, -LX], [LX, -LH, -LX], [LX, -LH, LX], [-LX, -LH, LX]], [0, -1, 0], 'a', 0.08);
+    aristasCaja(tapa, LX, -LH, LH, LX, 'a', 'o', ['o', 'b', 'o', 'b']);
+    // cintas cruzadas sobre la tapa
+    cara(tapa, [[-LX, LH, -CINTA], [LX, LH, -CINTA], [LX, LH, CINTA], [-LX, LH, CINTA]], [0, 1, 0], 'b', 0.28);
+    cara(tapa, [[-CINTA, LH, -LX], [CINTA, LH, -LX], [CINTA, LH, LX], [-CINTA, LH, LX]], [0, 1, 0], 'b', 0.28);
+    linea(tapa, [[-LX, LH, -CINTA], [LX, LH, -CINTA]], 'b', true);
+    linea(tapa, [[-LX, LH, CINTA], [LX, LH, CINTA]], 'b', true);
+    linea(tapa, [[-CINTA, LH, -LX], [-CINTA, LH, LX]], 'b', true);
+    linea(tapa, [[CINTA, LH, -LX], [CINTA, LH, LX]], 'b', true);
+
+    /* --- Lazo: nudo + 4 lazadas (en 3D real, se ve desde todos los lados) --- */
+    aristasCaja(tapa, 0.09, LH, LH + 0.11, 0.09, 'c', 'c', ['c', 'c', 'c', 'c']);
+    for (let k = 0; k < 4; k++) {
+      const ang = Math.PI / 4 + k * Math.PI / 2;
+      const ux = Math.cos(ang), uz = Math.sin(ang);
+      const N = 12, L = 0.62, H = 0.34, cy = 0.20, pts = [];
+      for (let i = 0; i <= N; i++) {                 // arco alto de la lazada
+        const t = i / N;
+        pts.push([ux * (0.07 + L * t), cy + H * Math.sin(Math.PI * t), uz * (0.07 + L * t)]);
+      }
+      for (let i = N - 1; i >= 1; i--) {             // arco bajo (vuelve al nudo)
+        const t = i / N;
+        pts.push([ux * (0.07 + L * t), cy + 0.10 * Math.sin(Math.PI * t), uz * (0.07 + L * t)]);
+      }
+      cara(tapa, pts, null, 'b', 0.12);
+      linea(tapa, pts, 'c', false, true);
+    }
+    // dos colitas del lazo que caen por la tapa
+    [1, -1].forEach((s) => {
+      linea(tapa, [
+        [s * 0.10, LH + 0.01, 0], [s * 0.42, LH + 0.005, 0.06],
+        [s * 0.78, LH + 0.005, 0.03], [s * 0.91, LH - 0.06, 0.05], [s * 0.93, -LH + 0.05, 0.05]
+      ], 'c', true);
+    });
+
+    return { cuerpo, tapa };
+  })();
+
+  /* ---- Estado y matematicas del render ---- */
+  let anguloCaja = 0.7;               // giro actual sobre el eje Y
+  let aperturaCaja = 0;               // 0 = cerrada, 1 = abierta (con rebote)
+  let velAperturaCaja = 0;
+  let tCajaAnt = 0;
+  let rafCaja = null;
+  let _T = null, _L = null, _u = 1, _cx = 0, _cy = 0;
+
+  const rgbaRegalo = (c, a) => 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a.toFixed(3) + ')';
+  const aclararRegalo = (c) => [c[0] + (255 - c[0]) * 0.4, c[1] + (255 - c[1]) * 0.4, c[2] + (255 - c[2]) * 0.4].map(Math.round);
+  const profundidadRegalo = (z) => 0.35 + 0.65 * Math.min(Math.max(0.5 + 0.5 * z / 1.4, 0), 1);
+
+  /* Mundo -> vista. Si esTapa, primero aplica el transform de la tapa
+     (giro propio + inclinacion + subida). dir=true para vectores normales. */
+  function aVista(p, esTapa, dir) {
+    let x = p[0], y = p[1], z = p[2];
+    if (esTapa) {
+      const x1 = x * _L.cs + z * _L.ss;
+      const z1 = -x * _L.ss + z * _L.cs;
+      x = x1 * _L.cr - y * _L.sr;
+      y = x1 * _L.sr + y * _L.cr;
+      z = z1;
+      if (!dir) { x += _L.tx; y += _L.ty; }
+    }
+    const X = x * _T.ca + z * _T.sa;              // giro del regalo sobre Y
+    const Z = -x * _T.sa + z * _T.ca;
+    return [X, y * _T.cp - Z * _T.sp, y * _T.sp + Z * _T.cp];   // camara inclinada
+  }
+  function aPantalla(v) {
+    const k = DIST_CAMARA_REGALO / (DIST_CAMARA_REGALO - v[2]);  // perspectiva
+    return [_cx + v[0] * _u * k, _cy - v[1] * _u * k];
+  }
+
+  function trazoNeonRegalo(c, ps, col, w, alfa, cerrado) {
+    c.beginPath();
+    c.moveTo(ps[0][0], ps[0][1]);
+    for (let i = 1; i < ps.length; i++) c.lineTo(ps[i][0], ps[i][1]);
+    if (cerrado) c.closePath();
+    c.strokeStyle = rgbaRegalo(col, alfa * 0.22);          // halo
+    c.lineWidth = w * 3.6;
+    c.stroke();
+    c.strokeStyle = rgbaRegalo(aclararRegalo(col), alfa);  // nucleo
+    c.lineWidth = w;
+    c.stroke();
+  }
+
+  function dibujarGrupoRegalo(c, g, esTapa, W) {
+    const wBase = Math.max(1.3, W * 0.0078);
+    for (let i = 0; i < g.caras.length; i++) {
+      const f = g.caras[i];
+      let zs = 0;
+      const ps = [];
+      for (let j = 0; j < f.p.length; j++) {
+        const v = aVista(f.p[j], esTapa);
+        zs += v[2];
+        ps.push(aPantalla(v));
+      }
+      const frente = f.n ? aVista(f.n, esTapa, true)[2] > 0 : true;
+      const a = f.a * (frente ? 1 : 0.3) * profundidadRegalo(zs / f.p.length);
+      c.beginPath();
+      c.moveTo(ps[0][0], ps[0][1]);
+      for (let j = 1; j < ps.length; j++) c.lineTo(ps[j][0], ps[j][1]);
+      c.closePath();
+      c.fillStyle = rgbaRegalo(COL_REGALO[f.col], a);
+      c.fill();
+    }
+    for (let i = 0; i < g.lineas.length; i++) {
+      const l = g.lineas[i];
+      let zs = 0;
+      const ps = [];
+      for (let j = 0; j < l.p.length; j++) {
+        const v = aVista(l.p[j], esTapa);
+        zs += v[2];
+        ps.push(aPantalla(v));
+      }
+      const a = 0.95 * profundidadRegalo(zs / l.p.length);
+      trazoNeonRegalo(c, ps, COL_REGALO[l.col], l.fino ? wBase * 0.65 : wBase, a, l.cerrado);
+    }
+  }
+
+  /* Haz de luz que sale de la boca (un tronco de piramide en 3D) + brillo de la boca */
+  function dibujarLuzRegalo(c, g) {
+    const yB = 0.3, yT = 1.55, sB = 0.7, sT = 0.38;
+    const anillo = (y, s) => [[-s, y, -s], [s, y, -s], [s, y, s], [-s, y, s]].map((p) => aPantalla(aVista(p, false)));
+    const B = anillo(yB, sB), Tp = anillo(yT, sT);
+    const cB = aPantalla(aVista([0, yB, 0], false));
+    const cT = aPantalla(aVista([0, yT, 0], false));
+
+    const gr = c.createLinearGradient(cB[0], cB[1], cT[0], cT[1]);
+    gr.addColorStop(0,    'rgba(255,224,138,' + (0.40 * g).toFixed(3) + ')');
+    gr.addColorStop(0.45, 'rgba(57,168,255,'  + (0.14 * g).toFixed(3) + ')');
+    gr.addColorStop(1,    'rgba(255,0,200,0)');
+    c.fillStyle = gr;
+    for (let i = 0; i < 4; i++) {
+      const j = (i + 1) % 4;
+      c.beginPath();
+      c.moveTo(B[i][0], B[i][1]); c.lineTo(B[j][0], B[j][1]);
+      c.lineTo(Tp[j][0], Tp[j][1]); c.lineTo(Tp[i][0], Tp[i][1]);
+      c.closePath();
+      c.fill();
+    }
+
+    const r = Math.hypot(B[0][0] - B[2][0], B[0][1] - B[2][1]) / 2;
+    const gb = c.createRadialGradient(cB[0], cB[1], 0, cB[0], cB[1], r);
+    gb.addColorStop(0,   'rgba(255,242,176,' + (0.75 * g).toFixed(3) + ')');
+    gb.addColorStop(0.5, 'rgba(255,160,48,'  + (0.38 * g).toFixed(3) + ')');
+    gb.addColorStop(1,   'rgba(255,138,31,0)');
+    c.fillStyle = gb;
+    c.beginPath();
+    c.moveTo(B[0][0], B[0][1]);
+    for (let i = 1; i < 4; i++) c.lineTo(B[i][0], B[i][1]);
+    c.closePath();
+    c.fill();
+  }
+
+  function cuadroCaja(ahora) {
+    rafCaja = requestAnimationFrame(cuadroCaja);
+    const dt = Math.min(Math.max((ahora - tCajaAnt) / 1000, 0), 0.05);
+    tCajaAnt = ahora;
+
+    const W = lienzoCaja.clientWidth;
+    if (!W) return;
+    const c = ctxCaja;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const px = Math.round(W * dpr);
+    if (lienzoCaja.width !== px) { lienzoCaja.width = px; lienzoCaja.height = px; }
+    c.setTransform(px / W, 0, 0, px / W, 0, 0);
+    c.globalCompositeOperation = 'source-over';
+    c.clearRect(0, 0, W, W);
+
+    // Giro sobre su propio eje (siempre activo: no depende de "reducir movimiento" del sistema)
+    anguloCaja += dt * VEL_GIRO_REGALO;
+
+    // Tapa: resorte (sube con rebote al abrir, baja seca al cerrar)
+    const objetivo = regaloCosmico.classList.contains('abierto') ? 1 : 0;
+    const rig = objetivo ? 95 : 260, amort = objetivo ? 9.5 : 32;
+    velAperturaCaja += (rig * (objetivo - aperturaCaja) - amort * velAperturaCaja) * dt;
+    aperturaCaja += velAperturaCaja * dt;
+    if (aperturaCaja < 0) { aperturaCaja = 0; velAperturaCaja = 0; }
+    const o = aperturaCaja;
+
+    _T = {
+      ca: Math.cos(anguloCaja), sa: Math.sin(anguloCaja),
+      cp: Math.cos(INCLINACION_REGALO), sp: Math.sin(INCLINACION_REGALO)
+    };
+    const giroTapa = 0.55 * o, ladeoTapa = 0.16 * o;
+    _L = {
+      cs: Math.cos(giroTapa), ss: Math.sin(giroTapa),
+      cr: Math.cos(ladeoTapa), sr: Math.sin(ladeoTapa),
+      tx: 0.26 * o,
+      ty: 0.42 + ALTURA_TAPA_REGALO * o + Math.sin(ahora / 650) * 0.035 * Math.min(o, 1)
+    };
+    _u = W * 0.22;
+    _cx = W / 2;
+    _cy = W * 0.535;          // la boca de la caja cae en ~47% de la altura (ver bocaRegalo)
+
+    c.globalCompositeOperation = 'lighter';
+    c.lineCap = 'round';
+    c.lineJoin = 'round';
+
+    const brillo = Math.min(Math.max(o, 0), 1);
+    if (brillo > 0.02) dibujarLuzRegalo(c, brillo);
+    dibujarGrupoRegalo(c, MODELO_REGALO.cuerpo, false, W);
+    dibujarGrupoRegalo(c, MODELO_REGALO.tapa, true, W);
+
+    // Lineas de escaneo holograficas SOLO sobre el dibujo (source-atop no pinta el fondo)
+    c.globalCompositeOperation = 'source-atop';
+    c.fillStyle = 'rgba(0,0,0,0.30)';
+    const paso = Math.max(3, W * 0.014);
+    const desp = (ahora / 45) % paso;
+    for (let y = -paso + desp; y < W; y += paso) c.fillRect(0, y, W, paso * 0.4);
+    const sy = ((ahora / 2800) % 1) * W * 1.3 - W * 0.15, alto = W * 0.09;
+    const gs = c.createLinearGradient(0, sy - alto, 0, sy + alto);
+    gs.addColorStop(0, 'rgba(0,255,255,0)');
+    gs.addColorStop(0.5, 'rgba(0,255,255,0.22)');
+    gs.addColorStop(1, 'rgba(0,255,255,0)');
+    c.fillStyle = gs;
+    c.fillRect(0, sy - alto, W, alto * 2);
+    c.globalCompositeOperation = 'source-over';
+  }
+
+  function arrancarCajaRegalo() {
+    if (rafCaja) return;
+    tCajaAnt = performance.now();
+    rafCaja = requestAnimationFrame(cuadroCaja);
+  }
+  function detenerCajaRegalo() {
+    if (rafCaja) cancelAnimationFrame(rafCaja);
+    rafCaja = null;
   }
 
   /* ---------------- Posicion aleatoria del regalo ---------------- */
@@ -561,12 +907,13 @@
 
   function abrirRegalo() {
     estadoRegalo = 'abierto';
+    sonidoAbrirRegalo();                    // sonido cosmico (se llama dentro del click: el audio esta permitido)
     regaloCosmico.classList.add('abierto', 'pop');
     programarRegalo(() => regaloCosmico.classList.remove('pop'), 420);
 
     // Estallido en la boca del regalo
     const b = bocaRegalo();
-    chispasRegalo(b.x, b.y - 10 * b.esc, { cantidad: 60, fuerza: 1.0 * b.esc + 0.2 });
+    chispasRegalo(b.x, b.y - 10 * b.esc, { cantidad: 60, fuerza: Math.min(b.esc, 1.5) + 0.2 });
 
     // 8 cohetes que explotan repartidos por TODA la pantalla (4 columnas x 2 filas,
     // un punto al azar dentro de cada celda y en orden aleatorio)
@@ -633,6 +980,8 @@
   document.addEventListener('click', (e) => {
     if (estadoRegalo === 'apagado' || estadoRegalo === 'ocupado') return;
     if (contenedorMenu && contenedorMenu.contains(e.target)) return;
+    // El enlace de la notita solo abre la URL: no debe plegar ni mover el regalo
+    if (e.target.closest && e.target.closest('.rg-hoja-firma a')) return;
 
     if (estadoRegalo === 'abierto') {
       viajarRegalo();
@@ -695,25 +1044,31 @@
   }
 
   /* =====================================================================
-     FUEGOS ARTIFICIALES ESTILO CYBERPUNK (canvas)
-     - Dibujo aditivo ('lighter') con estela: sin shadowBlur por particula
-       (era lo que hacia parpadear/entrecortar las chispas)
-     - 4 tipos de particula, elegidos al azar en cada explosion, para dar
-       la sensacion de "explosion digital" a tono con el resto del sitio
-       (mismo look que la lluvia de codigo / el glow ciano-magenta):
-         raya  -> chispa/estela clasica
-         rombo -> destello holografico (contorno, sin relleno solido)
-         pixel -> cuadradito hueco, estilo "chip" digital (contorno)
-         glifo -> caracter suelto (0 1 # % & ...) como la Lluvia Codificada
-     - Paleta ceñida a neón rosa/magenta y azul/celeste (look cyberpunk)
-     - cohetes que suben y explotan en cualquier punto de la pantalla
+     FUEGOS ARTIFICIALES CYBERPUNK (canvas)  -  look de la pagina
+     -----------------------------------------------------------------
+     La pagina usa: cian #0ff y magenta #ff00c8 puros sobre negro, texto
+     Courier New con glow, puntitos cian/magenta de fondo, un corazon de
+     malla con una orbita eliptica y destellos ✦, y lluvia de codigo.
+     Por eso ahora las particulas son:
+       raya     -> estela neon (cian/magenta puro, con halo)
+       punto    -> puntito con halo, igual que las estrellas del fondo
+       estrella -> destello ✦ de 4 puntas, como los del corazon
+       glifo    -> caracter de codigo (Courier New) con desdoblado RGB
+                   cian/magenta, parpadeo y cambio de caracter (glitch)
+       pixel / rombo -> contornos holograficos (poco frecuentes)
+     Ya no hay tonos azul/lila: el color NO migra al morir la particula,
+     solo se desvanece, como el resto de los neones de la pagina.
+     Dibujo aditivo ('lighter') con estela; sin shadowBlur por particula.
      ===================================================================== */
-  const HUES_REGALO = [195, 205, 215, 300, 320, 330];  // azul/celeste neón + rosa/magenta neón
-  const GLIFOS_REGALO = '01#%&/*¡!'.split('');
+  const HUES_REGALO = [180, 313];                       // cian #0ff  y  magenta #ff00c8
+  const GLIFOS_REGALO = '0101010110{}[]<>/;#$%&*+='.split('');
   const particulasRegalo = [];
   const anillosRegalo = [];
   const cohetesRegalo = [];
   let anchoRegalo = 0, altoRegalo = 0, corriendoRegalo = false;
+
+  const nRegalo = (h, l, a) => 'hsla(' + h + ',100%,' + l + '%,' + a + ')';
+  const opuestoRegalo = (h) => (h < 250 ? 313 : 180);   // el "otro" color de la pagina
 
   function ajustarCanvasRegalo() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -726,13 +1081,15 @@
     ctxRegalo.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  /* raya 45% / rombo 20% / pixel 20% / glifo 15% */
+  /* raya 32% / punto 20% / estrella 16% / glifo 22% / pixel 5% / rombo 5% */
   function elegirTipoParticulaRegalo() {
     const r = Math.random();
-    if (r < 0.45) return 'raya';
-    if (r < 0.65) return 'rombo';
-    if (r < 0.85) return 'pixel';
-    return 'glifo';
+    if (r < 0.32) return 'raya';
+    if (r < 0.52) return 'punto';
+    if (r < 0.68) return 'estrella';
+    if (r < 0.90) return 'glifo';
+    if (r < 0.95) return 'pixel';
+    return 'rombo';
   }
 
   function particulaRegalo(x, y, vx, vy, o) {
@@ -761,7 +1118,8 @@
     for (let i = 0; i < cantidad; i++) {
       const ang = Math.random() * TAU;
       const vel = (0.7 + Math.random() * 2.6) * fuerza;
-      const hue = (Math.random() < 0.7 ? base : HUES_REGALO[(Math.random() * HUES_REGALO.length) | 0]) + (Math.random() * 16 - 8);
+      // ~70% del color dominante y ~30% del otro: dos tonos, como el texto de la pagina
+      const hue = (Math.random() < 0.7 ? base : opuestoRegalo(base)) + (Math.random() * 8 - 4);
       particulaRegalo(x, y, Math.cos(ang) * vel, Math.sin(ang) * vel, {
         hue, dur: 55 + Math.random() * 45, tam: 0.9 + Math.random() * 1.2
       });
@@ -770,8 +1128,8 @@
     arrancarRegalo();
   }
 
-  /* Fuente suave de chispas subiendo mientras el regalo esta abierto
-     (se deja siempre como "raya" para que no sature de texto/pixeles) */
+  /* Fuente suave de chispas subiendo mientras el regalo esta abierto.
+     Casi todo son rayas; de vez en cuando sube un 0/1 como codigo flotando. */
   function iniciarFuenteRegalo() {
     detenerFuenteRegalo();
     idFuenteRegalo = setInterval(() => {
@@ -783,11 +1141,70 @@
           { dur: 45 + Math.random() * 30, tam: 0.9 + Math.random(), grav: 0.03, tipo: 'raya' }
         );
       }
+      if (Math.random() < 0.3) {
+        particulaRegalo(
+          b.x + (Math.random() - 0.5) * 50 * b.esc, b.y - 6 * b.esc,
+          (Math.random() - 0.5) * 0.8, -(0.9 + Math.random() * 1.4),
+          { dur: 60 + Math.random() * 30, tam: 0.9, grav: 0.012, tipo: 'glifo' }
+        );
+      }
     }, 110);
+    programarFuegosCajaRegalo();           // + fuegos artificiales aleatorios dentro de la caja
   }
   function detenerFuenteRegalo() {
     if (idFuenteRegalo) clearInterval(idFuenteRegalo);
     idFuenteRegalo = null;
+    clearTimeout(idFuegosCajaRegalo);      // tambien apaga los fuegos de dentro de la caja
+    idFuegosCajaRegalo = null;
+  }
+
+  /* ---------- Fuegos artificiales DENTRO de la caja (aleatorios) ----------
+     Mientras el regalo esta abierto, cada 0.25-0.9 s (al azar) aparece un
+     mini fuego artificial en un punto cualquiera de la boca de la caja:
+       - 60%: un mini cohete que sube desde el fondo de la caja y explota
+       - 40%: una explosion directa que "brota" dentro de la caja
+     A veces salen dos casi juntos. Tamaño, cantidad y color son al azar y
+     escalan con el tamaño de la caja. Ajusta:
+       FUEGOS_CAJA_MIN / FUEGOS_CAJA_MAX -> tiempo entre fuegos (ms)
+       FUEGOS_CAJA_RADIO                 -> que tan abierta es la zona (fraccion del ancho) */
+  const FUEGOS_CAJA_MIN = 250, FUEGOS_CAJA_MAX = 900;
+  const FUEGOS_CAJA_RADIO = 0.13;
+  let idFuegosCajaRegalo = null;
+
+  function fuegoDentroCajaRegalo() {
+    const r = regaloCosmico.getBoundingClientRect();
+    const W = r.width;
+    const esc = W / 280;                                       // 1 = tamaño original de la caja
+    // Punto al azar dentro de la boca (elipse: la caja se ve un poco desde arriba)
+    const ang = Math.random() * TAU;
+    const rad = Math.sqrt(Math.random()) * W * FUEGOS_CAJA_RADIO;
+    const x1 = r.left + W / 2 + Math.cos(ang) * rad;
+    const y1 = r.top + r.height * 0.47 + Math.sin(ang) * rad * 0.45 - Math.random() * r.height * 0.05;
+    const cantidad = 12 + ((Math.random() * 16) | 0);
+    const fuerza = (0.3 + Math.random() * 0.3) * Math.min(esc, 1.5);
+
+    if (Math.random() < 0.6) {
+      cohetesRegalo.push({                                     // mini cohete desde el fondo de la caja
+        x0: x1 + (Math.random() - 0.5) * W * 0.06, y0: r.top + r.height * 0.64,
+        x1, y1, x: x1, y: r.top + r.height * 0.64,
+        t: 0, dur: 9 + Math.random() * 7,
+        hue: HUES_REGALO[(Math.random() * HUES_REGALO.length) | 0],
+        cant: cantidad, fuerza
+      });
+      arrancarRegalo();
+    } else {
+      chispasRegalo(x1, y1, { cantidad, fuerza });             // explosion directa
+    }
+  }
+
+  function programarFuegosCajaRegalo() {
+    clearTimeout(idFuegosCajaRegalo);
+    idFuegosCajaRegalo = setTimeout(() => {
+      if (estadoRegalo !== 'abierto') return;
+      fuegoDentroCajaRegalo();
+      if (Math.random() < 0.25) setTimeout(() => { if (estadoRegalo === 'abierto') fuegoDentroCajaRegalo(); }, 70 + Math.random() * 120);
+      programarFuegosCajaRegalo();
+    }, FUEGOS_CAJA_MIN + Math.random() * (FUEGOS_CAJA_MAX - FUEGOS_CAJA_MIN));
   }
 
   function dibujarRomboRegalo(x, y, s, rot, h, a) {
@@ -798,9 +1215,9 @@
     c.beginPath();
     c.moveTo(0, -s); c.lineTo(s * 0.6, 0); c.lineTo(0, s); c.lineTo(-s * 0.6, 0);
     c.closePath();
-    c.fillStyle = 'hsla(' + h + ',100%,70%,' + (a * 0.22) + ')';   // relleno tenue: se lee como contorno
+    c.fillStyle = nRegalo(h, 55, a * 0.18);
     c.fill();
-    c.strokeStyle = 'hsla(' + h + ',100%,88%,' + a + ')';
+    c.strokeStyle = nRegalo(h, 66, a);
     c.lineWidth = 1;
     c.stroke();
     c.restore();
@@ -811,22 +1228,58 @@
     c.save();
     c.translate(x, y);
     c.rotate(rot);
-    c.fillStyle = 'hsla(' + h + ',100%,75%,' + (a * 0.18) + ')';   // relleno tenue: se lee como contorno
+    c.fillStyle = nRegalo(h, 55, a * 0.16);
     c.fillRect(-s / 2, -s / 2, s, s);
-    c.strokeStyle = 'hsla(' + h + ',100%,90%,' + a + ')';
+    c.strokeStyle = nRegalo(h, 66, a);
     c.lineWidth = 0.9;
     c.strokeRect(-s / 2, -s / 2, s, s);
     c.restore();
   }
 
+  /* Puntito con halo: mismo look que las estrellitas cian/magenta del fondo */
+  function dibujarPuntoRegalo(x, y, s, h, a) {
+    const c = ctxRegalo;
+    c.beginPath();
+    c.arc(x, y, s * 3, 0, TAU);
+    c.fillStyle = nRegalo(h, 50, a * 0.16);
+    c.fill();
+    c.beginPath();
+    c.arc(x, y, s, 0, TAU);
+    c.fillStyle = nRegalo(h, 62, a);
+    c.fill();
+  }
+
+  /* Destello ✦ de 4 puntas (como los que rodean al corazon) */
+  function dibujarEstrellaRegalo(x, y, s, rot, h, a) {
+    const c = ctxRegalo;
+    const k = s * 0.2;
+    c.save();
+    c.translate(x, y);
+    c.rotate(rot);
+    c.beginPath();
+    c.arc(0, 0, s * 0.95, 0, TAU);
+    c.fillStyle = nRegalo(h, 55, a * 0.14);
+    c.fill();
+    c.beginPath();
+    c.moveTo(0, -s); c.lineTo(k, -k); c.lineTo(s, 0); c.lineTo(k, k);
+    c.lineTo(0, s);  c.lineTo(-k, k); c.lineTo(-s, 0); c.lineTo(-k, -k);
+    c.closePath();
+    c.fillStyle = nRegalo(h, 68, a);
+    c.fill();
+    c.restore();
+  }
+
+  /* Glifo de codigo en Courier New (la tipografia de la pagina) con desdoblado RGB */
   function dibujarGlifoRegalo(x, y, tam, h, a, caracter) {
     const c = ctxRegalo;
     c.save();
-    c.font = (9 + tam * 6) + 'px "Courier New", monospace';
+    c.font = 'bold ' + Math.round(8 + tam * 4.5) + 'px "Courier New", monospace';
     c.textAlign = 'center';
     c.textBaseline = 'middle';
-    c.fillStyle = 'hsla(' + h + ',100%,80%,' + a + ')';
-    c.fillText(caracter, x, y);
+    c.fillStyle = nRegalo(opuestoRegalo(h), 58, a * 0.5);   // copia desfasada del otro color
+    c.fillText(caracter, x + 1.6, y);
+    c.fillStyle = nRegalo(h, 62, a);
+    c.fillText(caracter, x - 0.8, y);
     c.restore();
   }
 
@@ -854,8 +1307,11 @@
       c.beginPath();
       c.moveTo(k.x, k.y);
       c.lineTo(nx, ny);
-      c.strokeStyle = 'hsla(' + k.hue + ',100%,78%,0.9)';
-      c.lineWidth = 2;
+      c.strokeStyle = nRegalo(k.hue, 50, 0.3);
+      c.lineWidth = 5;
+      c.stroke();
+      c.strokeStyle = nRegalo(k.hue, 66, 0.95);
+      c.lineWidth = 1.8;
       c.stroke();
       k.x = nx; k.y = ny;
       if (Math.random() < 0.6) {
@@ -864,7 +1320,10 @@
       }
       if (f >= 1) {
         cohetesRegalo.splice(i, 1);
-        chispasRegalo(k.x1, k.y1, { cantidad: 46 + ((Math.random() * 30) | 0), fuerza: 1.15 + Math.random() * 0.5 });
+        chispasRegalo(k.x1, k.y1, {
+          cantidad: k.cant || (46 + ((Math.random() * 30) | 0)),
+          fuerza: k.fuerza || (1.15 + Math.random() * 0.5)
+        });
       }
     }
 
@@ -878,23 +1337,29 @@
       p.rot += p.vrot;
 
       const f = p.t / p.dur;
-      const a = Math.pow(1 - f, 1.4);
-      const h = (p.hue + f * 40) % 360;     // el color migra dentro de la misma familia rosa/azul al morir
+      const a = Math.pow(1 - f, 1.3);
+      const h = p.hue;                      // el color NO cambia: solo se desvanece
 
       if (p.tipo === 'rombo') {
         dibujarRomboRegalo(p.x, p.y, p.tam * 2.6, p.rot, h, a);
       } else if (p.tipo === 'pixel') {
         dibujarPixelRegalo(p.x, p.y, p.tam * 2.3, p.rot, h, a);
+      } else if (p.tipo === 'punto') {
+        dibujarPuntoRegalo(p.x, p.y, p.tam * 1.5, h, a);
+      } else if (p.tipo === 'estrella') {
+        const brillo = 0.65 + 0.35 * Math.sin(p.t * 0.7 + p.rot);   // titileo
+        dibujarEstrellaRegalo(p.x, p.y, p.tam * 3.6, p.rot * 0.2, h, a * brillo);
       } else if (p.tipo === 'glifo') {
-        dibujarGlifoRegalo(p.x, p.y, p.tam, h, a, p.glifo);
+        if (Math.random() < 0.06) p.glifo = GLIFOS_REGALO[(Math.random() * GLIFOS_REGALO.length) | 0];   // cambia como lluvia de codigo
+        if (Math.random() > 0.10) dibujarGlifoRegalo(p.x, p.y, p.tam, h, a, p.glifo);                    // parpadeo glitch
       } else {
         c.beginPath();
         c.moveTo(p.x - p.vx * 1.8, p.y - p.vy * 1.8);
         c.lineTo(p.x, p.y);
-        c.strokeStyle = 'hsla(' + h + ',100%,60%,' + (a * 0.28) + ')';
-        c.lineWidth = p.tam * 3.2;
+        c.strokeStyle = nRegalo(h, 50, a * 0.30);
+        c.lineWidth = p.tam * 3.4;
         c.stroke();
-        c.strokeStyle = 'hsla(' + h + ',100%,82%,' + a + ')';
+        c.strokeStyle = nRegalo(h, 68, a);
         c.lineWidth = p.tam;
         c.stroke();
       }
@@ -907,10 +1372,16 @@
       r.vr *= 0.94;
       r.r += r.vr;
       const a = 1 - r.t / r.dur;
+      // Orbita eliptica (como la del corazon): un anillo del color base + uno interior del otro color
       c.beginPath();
-      c.ellipse(r.x, r.y, r.r, r.r * 0.38, 0, 0, TAU);   // disco proyectado en perspectiva
-      c.strokeStyle = 'hsla(' + r.hue + ',100%,72%,' + (a * 0.8) + ')';
-      c.lineWidth = 1.2;
+      c.ellipse(r.x, r.y, r.r, r.r * 0.38, 0, 0, TAU);
+      c.strokeStyle = nRegalo(r.hue, 60, a * 0.85);
+      c.lineWidth = 1.4;
+      c.stroke();
+      c.beginPath();
+      c.ellipse(r.x, r.y, r.r * 0.62, r.r * 0.62 * 0.38, 0, 0, TAU);
+      c.strokeStyle = nRegalo(opuestoRegalo(r.hue), 60, a * 0.5);
+      c.lineWidth = 1;
       c.stroke();
     }
 
@@ -931,12 +1402,16 @@
     regaloCosmico.classList.remove('visible', 'abierto', 'pop');
     hojaRegalo.classList.remove('activa', 'abierta', 'cerrando');
     estadoRegalo = 'ocupado';               // todavia no se puede tocar: se esta materializando
+    aperturaCaja = 0; velAperturaCaja = 0;  // la caja arranca cerrada
+    arrancarCajaRegalo();                   // enciende el motor 3D
     programarRegalo(aparecerRegalo, 250);
   }
 
   function detenerRegalo() {
     cancelarTemporizadoresRegalo();
     detenerFuenteRegalo();
+    detenerCajaRegalo();                    // apaga el motor 3D (no consume CPU con el tema apagado)
+    silenciarSonidoRegalo();                // si estaba sonando, se corta con un fundido rapido
     estadoRegalo = 'apagado';
     particulasRegalo.length = 0;
     anillosRegalo.length = 0;
