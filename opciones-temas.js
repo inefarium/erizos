@@ -27,8 +27,13 @@
    - Puede pasar por encima del texto principal sin problema (ya no lo
      evita).
 
-   NO modifica tu index.html: solo agregá antes de </body>:
+   ---------- Temas-plugin (ej. regalo-cosmico.js) ----------------------
+   Este archivo expone window.OpcionesTemas para que otros archivos de
+   tema se registren en el menú SIN tener que tocar este archivo:
+     window.OpcionesTemas.registrarTema({ id, etiqueta, activar, desactivar })
+   Cargá ese script DESPUES de este, en tu HTML:
      <script src="opciones-temas.js"></script>
+     <script src="regalo-cosmico.js"></script>
    ===================================================================== */
 
 (function () {
@@ -481,39 +486,35 @@ const linkPrenovia = overlayPrenovia.querySelector('.link-holograma-tema');
     if (!contenedorMenu.contains(e.target)) cerrarMenu();
   });
 
-  /* ---------- 4. Lógica de selección exclusiva (tipo trigger) ---------- */
+  /* ---------- 4. Registro de temas (selección exclusiva tipo trigger) ---
+     Cada tema (base o plugin) es { activar(), desactivar() }. Para
+     "apagar todo" simplemente se llama desactivar() de TODOS los temas
+     registrados (es seguro: cada desactivar() es idempotente). Esto
+     permite que archivos como regalo-cosmico.js se sumen al menú sin
+     que este archivo sepa que existen: solo llaman a
+     window.OpcionesTemas.registrarTema({ id, etiqueta, activar, desactivar }) */
+  const registroTemas = {};
+  const botonesOpcion = [];
   let temaActivo = null;
-  const botonesOpcion = Array.from(document.querySelectorAll('.opcion-tema[data-tema]'));
 
   function apagarTodosLosEfectos() {
-    detenerLluvia();
-    detenerParticulas();
-    detenerPrenovia();
-    canvasTemas.style.display = 'none';
-    overlayEscaner.style.display = 'none';
-    overlayGrid.style.display = 'none';
+    Object.keys(registroTemas).forEach((id) => {
+      try {
+        registroTemas[id].desactivar();
+      } catch (err) {
+        console.error('[opciones-temas] error al desactivar tema "' + id + '":', err);
+      }
+    });
   }
 
   function activarTema(nombre) {
     apagarTodosLosEfectos();
-    if (nombre === 'lluvia') {
-      canvasTemas.style.display = 'block';
-      iniciarLluvia();
-    } else if (nombre === 'particulas') {
-      canvasTemas.style.display = 'block';
-      iniciarParticulas();
-    } else if (nombre === 'escaner') {
-      overlayEscaner.style.display = 'block';
-    } else if (nombre === 'grid') {
-      overlayGrid.style.display = 'block';
-    } else if (nombre === 'prenovia') {
-      iniciarPrenovia();
-    } else if (nombre === 'libro') {
-       window.location.href = 'libro.html';
-    }
+    const tema = registroTemas[nombre];
+    if (tema && typeof tema.activar === 'function') tema.activar();
   }
 
-  botonesOpcion.forEach((btn) => {
+  function wireBoton(btn) {
+    botonesOpcion.push(btn);
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const tema = btn.dataset.tema;
@@ -522,16 +523,55 @@ const linkPrenovia = overlayPrenovia.querySelector('.link-holograma-tema');
         temaActivo = null;
         botonesOpcion.forEach((b) => b.classList.remove('activa'));
         apagarTodosLosEfectos();
-        cerrarMenu();  
+        cerrarMenu();
         return;
       }
 
       temaActivo = tema;
       botonesOpcion.forEach((b) => b.classList.toggle('activa', b === btn));
       activarTema(tema);
-      cerrarMenu();  
+      cerrarMenu();
     });
-  });
+  }
+
+  function agregarBotonTema(id, etiqueta) {
+    const btn = document.createElement('button');
+    btn.className = 'opcion-tema';
+    btn.dataset.tema = id;
+    btn.setAttribute('role', 'menuitemradio');
+    btn.textContent = etiqueta;
+    listaTemas.appendChild(btn);
+    return btn;
+  }
+
+  function registrarTemaInterno(id, etiqueta, activar, desactivar) {
+    registroTemas[id] = { activar: activar, desactivar: desactivar || function () {} };
+    const btnExistente = listaTemas.querySelector('.opcion-tema[data-tema="' + id + '"]');
+    const btn = btnExistente || agregarBotonTema(id, etiqueta);
+    wireBoton(btn);
+    return btn;
+  }
+
+  /* Registramos los 6 temas base sobre los mismos botones que ya existen
+     en el HTML de arriba (lluvia, escaner, grid, particulas, prenovia,
+     libro): registrarTemaInterno los encuentra por data-tema y solo les
+     agrega el click, sin crear botones duplicados. */
+  registrarTemaInterno('lluvia', 'Lluvia Codificada',
+    () => { canvasTemas.style.display = 'block'; iniciarLluvia(); },
+    () => { canvasTemas.style.display = 'none'; detenerLluvia(); });
+  registrarTemaInterno('escaner', 'Escaner Holografico',
+    () => { overlayEscaner.style.display = 'block'; },
+    () => { overlayEscaner.style.display = 'none'; });
+  registrarTemaInterno('grid', 'Grid Neon',
+    () => { overlayGrid.style.display = 'block'; },
+    () => { overlayGrid.style.display = 'none'; });
+  registrarTemaInterno('particulas', 'Particulas Etereas',
+    () => { canvasTemas.style.display = 'block'; iniciarParticulas(); },
+    () => { canvasTemas.style.display = 'none'; detenerParticulas(); });
+  registrarTemaInterno('prenovia', 'Mi Prenovia', iniciarPrenovia, detenerPrenovia);
+  registrarTemaInterno('libro', 'Paginas Cosmicas',
+    () => { window.location.href = 'libro.html'; },
+    () => {});
 
   /* ---------- 5. Efecto "Lluvia de código" (canvas) --------------------- */
   const ctx = canvasTemas.getContext('2d');
@@ -756,4 +796,29 @@ const linkPrenovia = overlayPrenovia.querySelector('.link-holograma-tema');
     detenerDriftPrenovia();
     mostrarCorazon();
   }
+
+  /* ---------- 8. API pública para temas-plugin (ej. regalo-cosmico.js) --
+     Con esto, regalo-cosmico.js (cargado DESPUES de este archivo) puede
+     agregarse solo al menú llamando a:
+       window.OpcionesTemas.registrarTema({
+         id: 'regalo', etiqueta: 'Regalo Cosmico',
+         activar: iniciarRegalo, desactivar: detenerRegalo
+       });
+     Le crea su botón "Regalo Cosmico" al final de la lista (no existía
+     antes en el HTML, así que agregarBotonTema lo crea) y lo conecta a
+     la misma selección exclusiva que los demás temas. */
+  window.OpcionesTemas = {
+    registrarTema(config) {
+      if (!config || !config.id || typeof config.activar !== 'function') {
+        console.error('[opciones-temas] registrarTema necesita { id, etiqueta, activar, desactivar }', config);
+        return null;
+      }
+      return registrarTemaInterno(config.id, config.etiqueta || config.id, config.activar, config.desactivar);
+    },
+    ocultarCorazon,
+    mostrarCorazon,
+    cerrarMenu,
+    contenedorMenu,
+    listaTemas
+  };
 })();
