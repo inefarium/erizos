@@ -483,7 +483,7 @@
       estadoEl.className = 'cal-estado local';
       estadoEl.title = 'Solo se guarda en este dispositivo (falta configurar FIREBASE_URL)';
     } else if (ok) {
-      estadoEl.textContent = '● COMPARTIDO';
+     
       estadoEl.className = 'cal-estado';
       estadoEl.title = 'Todos ven las mismas películas';
     } else {
@@ -752,7 +752,7 @@
     ayudaEl.textContent = '';
     const sel = seleccionId ? buscar(seleccionId) : null;
     if (!sel) {
-      ayudaEl.textContent = 'Arrastra una película a un día (en el celular, mantenla presionada un momento), o tócala y luego toca el día.';
+      ayudaEl.textContent = 'Arrastra una pelí a un día, en el celular debes presionar un momento chamoy:3, o tócala y luego toca el día.';
       return;
     }
     const linea = document.createElement('div');
