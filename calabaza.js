@@ -10,11 +10,20 @@
      <script src="calabaza.js"></script>
 
    Cambios de esta version:
-   - Se quito el contorno redondo (silueta) de la calabaza.
-   - Sonido de explosion mas etereo: boom grave con cola de reverb,
-     brillo de campanas fantasmales y un soplo de aire.
+   - CALENDARIO COMPARTIDO: las peliculas se guardan en Firebase Realtime
+     Database (via REST, sin librerias). Todos ven lo mismo y se actualiza
+     solo cada pocos segundos. Si no configuras FIREBASE_URL funciona en
+     modo local (localStorage) y, si existe peliculas.json en tu proyecto,
+     lo usa como lista inicial (solo lectura).
+   - FIX particulas: la explosion fallaba a veces porque el primer cuadro
+     podia tener tiempo negativo y arc() lanzaba error (mataba la animacion).
+     Ademas las particulas ahora van por encima de la cara de susto.
+   - FIX celular: se puede arrastrar desde cualquier parte de la pelicula
+     con pulsacion larga (~0.2 s); el scroll de la lista sigue funcionando.
+     El toque corto sigue seleccionando.
+   - MUSICA al entrar al tema, con un poquito de reverb.
 
-   Formato del JSON:
+   Formato del JSON (peliculas.json / boton { }):
      { "version": 1, "peliculas": [ { "id": "p1", "titulo": "Scream", "fecha": "2026-10-31" } ] }
 
    API extra (consola o tu propio codigo):
@@ -23,6 +32,7 @@
      window.CalabazaHalloween.irA(2027, 9)      // año, mes (0 = enero)
      window.CalabazaHalloween.aloquese()        // fuerza un ataque de locura
      window.CalabazaHalloween.explotar()        // fuerza la explosion
+     window.CalabazaHalloween.sincronizar()     // fuerza una lectura de la nube
    ===================================================================== */
 
 (function () {
@@ -34,6 +44,22 @@
   }
 
   /* ---------- CONFIGURACION (edita a gusto) ------------------------------ */
+
+  // ---- Calendario compartido (Firebase Realtime Database) ----
+  // Pega aqui la URL de tu base de datos, por ejemplo:
+  //   'https://mi-proyecto-default-rtdb.firebaseio.com'
+  // Si lo dejas vacio ('') funciona solo en modo local.
+  const FIREBASE_URL = 'https://calabazainefarium-default-rtdb.firebaseio.com';
+  const RUTA_DB = 'calabaza/peliculas';   // carpeta dentro de la base de datos
+  const SYNC_MS = 4000;                   // cada cuanto lee cambios de otros (ms)
+  const ARCHIVO_SEMILLA = 'peliculas.json'; // lista inicial en modo local (opcional)
+
+  // ---- Musica ----
+  const MUSICA = true;
+  const MUSICA_URL = "./cirice_ghost.mp3";        // <-- pon aqui la ruta de TU cancion
+  const MUSICA_VOL = 0.6;                 // 0 a 1
+  const MUSICA_REVERB = 0.22;             // cantidad de reverb (0 = nada, 0.22 = poquito, 0.5 = mucho)
+
   const ANIO_INICIAL = 2026;
   const MES_INICIAL = 9;           // 0 = enero ... 9 = octubre
   const ANIO_MIN = 1900;
@@ -55,6 +81,8 @@
 
   // Murcielagos
   const MURCIELAGOS = true;
+
+  const REMOTO = !!FIREBASE_URL;
 
   const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio',
                  'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -141,7 +169,8 @@
     }
 
     /* ----- Explosion + cara de scream ----- */
-    .cal-boom { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 40; pointer-events: none; display: none; }
+    /* z-index 55: las particulas van POR ENCIMA de la cara de susto (z 50) */
+    .cal-boom { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 55; pointer-events: none; display: none; }
     .cal-flash {
       position: fixed; inset: 0; z-index: 45; pointer-events: none;
       background: radial-gradient(circle, #fff 0%, #ffe2b0 38%, #ff7a1a 100%);
@@ -210,6 +239,9 @@
 
     .cal-cabecera { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
     .cal-espacio { flex: 1 1 0; }
+    .cal-estado { font-size: 0.82rem; white-space: nowrap; opacity: 0.9; color: #9bf5c4; }
+    .cal-estado.mal { color: #ff6a6a; }
+    .cal-estado.local { color: #ff9a3d; }
     .cal-btn {
       min-width: 42px; height: 42px; padding: 0 14px;
       font: inherit; font-size: 1.1rem; color: #39ff88; cursor: pointer;
@@ -258,6 +290,8 @@
       display: flex; align-items: center; gap: 4px; min-width: 0;
       padding: 3px 6px; font-size: 0.95rem; line-height: 1.15; color: #ffd9b3; cursor: grab;
       background: rgba(255,122,26,0.14); border: 1px solid rgba(255,122,26,0.7); border-radius: 5px;
+      -webkit-user-select: none; user-select: none;
+      -webkit-touch-callout: none; -webkit-user-drag: none;
     }
     .cal-peli.sel {
       color: #fff; background: rgba(255,0,200,0.2);
@@ -268,7 +302,7 @@
     .cal-peli.en-dia .cal-titulo {
       white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
     }
-    .cal-peli.en-lista { padding: 2px 8px 2px 2px; }
+    .cal-peli.en-lista { padding: 2px 8px 2px 2px; min-height: 40px; }
     .cal-asa {
       flex: none; display: flex; align-items: center; justify-content: center;
       width: 34px; height: 34px; font-size: 1.3rem; color: #ff9a3d; cursor: grab; touch-action: none;
@@ -291,7 +325,7 @@
       background: rgba(0,0,0,0.4); border: 1px solid rgba(57,255,136,0.55); border-radius: 6px;
       user-select: text; -webkit-user-select: text;
     }
-    .cal-lista { flex: 1 1 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 2px; }
+    .cal-lista { flex: 1 1 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding-right: 2px; -webkit-overflow-scrolling: touch; }
     .cal-vacio { font-size: 0.95rem; line-height: 1.4; opacity: 0.75; }
     .cal-ayuda { flex: none; font-size: 0.92rem; line-height: 1.4; color: #9bf5c4; }
     .cal-ayuda b { font-weight: normal; color: #ff9a3d; }
@@ -355,6 +389,7 @@
         <button class="cal-btn" id="calNext" aria-label="Mes siguiente">▶</button>
         <button class="cal-btn" id="calHoy">Hoy</button>
         <span class="cal-espacio"></span>
+        <span class="cal-estado" id="calEstado" aria-live="polite"></span>
         <button class="cal-btn" id="calJsonBtn" aria-label="Ver o cargar JSON">{ }</button>
         <button class="cal-btn" id="calCerrar" aria-label="Cerrar calendario">✕</button>
       </header>
@@ -405,17 +440,26 @@
   const jsonCaja = $('calJson');
   const jsonTexto = $('calJsonTexto');
   const jsonMsg = $('calJsonMsg');
+  const estadoEl = $('calEstado');
 
-  /* ---------- 3. DATOS (peliculas + JSON) --------------------------------- */
+  /* ---------- 3. DATOS (peliculas + JSON + nube) -------------------------- */
   let datos = { version: 1, peliculas: [] };
   let vistaAnio = ANIO_INICIAL;
   let vistaMes = MES_INICIAL;
   let seleccionId = null;
   let activo = false;
 
+  // Control de sincronizacion
+  let versionLocal = 0;       // sube con cada cambio hecho en ESTE dispositivo
+  let pendientes = 0;         // escrituras a la nube en vuelo
+  let finEscritura = 0;       // cuando termino la ultima escritura
+  let sincronizando = false;
+  let tSync = null;
+
   const fechaValida = (f) => typeof f === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(f);
   const nuevoId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const clave = (y, m, d) => String(y).padStart(4, '0') + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  const limpiarId = (s) => String(s).replace(/[^A-Za-z0-9_-]/g, '');
 
   function normalizar(obj) {
     const lista = Array.isArray(obj) ? obj : (obj && Array.isArray(obj.peliculas) ? obj.peliculas : []);
@@ -425,11 +469,28 @@
       if (!p || typeof p.titulo !== 'string') return;
       const titulo = p.titulo.trim().slice(0, 60).toLocaleUpperCase('es');
       if (!titulo) return;
-      const id = (typeof p.id === 'string' && p.id && !usados[p.id]) ? p.id : nuevoId();
+      let id = (typeof p.id === 'string' || typeof p.id === 'number') ? limpiarId(p.id) : '';
+      if (!id || usados[id]) id = nuevoId();
       usados[id] = true;
       salida.push({ id: id, titulo: titulo, fecha: fechaValida(p.fecha) ? p.fecha : null });
     });
     return { version: 1, peliculas: salida };
+  }
+
+  function estado(ok) {
+    if (!REMOTO) {
+      estadoEl.textContent = '● LOCAL';
+      estadoEl.className = 'cal-estado local';
+      estadoEl.title = 'Solo se guarda en este dispositivo (falta configurar FIREBASE_URL)';
+    } else if (ok) {
+      estadoEl.textContent = '● COMPARTIDO';
+      estadoEl.className = 'cal-estado';
+      estadoEl.title = 'Todos ven las mismas películas';
+    } else {
+      estadoEl.textContent = '● SIN CONEXIÓN';
+      estadoEl.className = 'cal-estado mal';
+      estadoEl.title = 'No se pudo hablar con la nube; reintentando';
+    }
   }
 
   function cargar() {
@@ -438,19 +499,113 @@
       if (crudo) datos = normalizar(JSON.parse(crudo));
     } catch (err) { /* sin almacenamiento o JSON roto: se parte vacio */ }
   }
-  function guardar() {
+  function guardar() {   // copia local (cache); la verdad compartida esta en la nube
     try { localStorage.setItem(CLAVE_ALMACEN, JSON.stringify(datos)); } catch (err) { /* ignorar */ }
   }
+
+  // Lista inicial desde peliculas.json (solo modo local y solo si no hay nada guardado)
+  async function cargarSemilla() {
+    if (REMOTO || datos.peliculas.length) return;
+    try {
+      const r = await fetch(ARCHIVO_SEMILLA, { cache: 'no-store' });
+      if (!r.ok) return;
+      const nuevo = normalizar(await r.json());
+      if (!nuevo.peliculas.length || datos.peliculas.length) return;
+      datos = nuevo;
+      guardar();
+      if (panel.classList.contains('abierto')) render();
+    } catch (err) { /* no hay archivo: se ignora */ }
+  }
+
+  /* ----- Nube (Firebase Realtime Database por REST) ----- */
+  function rutaDB(id) {
+    return FIREBASE_URL.replace(/\/+$/, '') + '/' + RUTA_DB + (id ? '/' + encodeURIComponent(id) : '') + '.json';
+  }
+  async function peticion(metodo, id, cuerpo) {
+    pendientes++;
+    try {
+      const r = await fetch(rutaDB(id), {
+        method: metodo,
+        headers: { 'Content-Type': 'application/json' },
+        body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo)
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      estado(true);
+      return true;
+    } catch (err) {
+      estado(false);
+      return false;
+    } finally {
+      pendientes--;
+      finEscritura = performance.now();
+    }
+  }
+  function subir(p) {
+    if (!REMOTO) return;
+    peticion('PUT', p.id, { titulo: p.titulo, fecha: p.fecha || null });
+  }
+  function bajarUna(id) {
+    if (!REMOTO) return;
+    peticion('DELETE', id);
+  }
+
+  async function sincronizar() {
+    if (!REMOTO || sincronizando) return;
+    sincronizando = true;
+    const inicio = performance.now();
+    const v = versionLocal;
+    try {
+      const r = await fetch(rutaDB() + '?_=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const crudo = await r.json();
+      estado(true);
+      // Si hubo cambios propios en el medio, esta lectura ya es vieja: se descarta.
+      if (pendientes > 0 || v !== versionLocal || inicio < finEscritura || arrastre) return;
+      const lista = crudo && typeof crudo === 'object'
+        ? Object.keys(crudo).map((id) => Object.assign({ id: id }, crudo[id]))
+        : [];
+      const nuevo = normalizar(lista);
+      const firma = (arr) => JSON.stringify(arr.slice().sort((a, b) => (a.id < b.id ? -1 : 1)));
+      if (firma(nuevo.peliculas) !== firma(datos.peliculas)) {
+        datos = nuevo;
+        if (seleccionId && !buscar(seleccionId)) seleccionId = null;
+        guardar();
+        if (panel.classList.contains('abierto')) render();
+      }
+    } catch (err) {
+      estado(false);
+    } finally {
+      sincronizando = false;
+    }
+  }
+  function iniciarSync() {
+    if (!REMOTO || tSync) return;
+    sincronizar();
+    tSync = setInterval(sincronizar, SYNC_MS);
+  }
+  function pararSync() {
+    clearInterval(tSync);
+    tSync = null;
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && panel.classList.contains('abierto')) sincronizar();
+  });
+
+  /* ----- Operaciones ----- */
   function exportarJSON() { return JSON.stringify(datos, null, 2); }
   function importarJSON(texto) {
-    try {
-      datos = normalizar(JSON.parse(texto));
-    } catch (err) {
-      return false;
-    }
+    let nuevo;
+    try { nuevo = normalizar(JSON.parse(texto)); } catch (err) { return false; }
+    datos = nuevo;
     seleccionId = null;
+    versionLocal++;
     guardar();
     render();
+    if (REMOTO) {
+      const mapa = {};
+      datos.peliculas.forEach((p) => { mapa[p.id] = { titulo: p.titulo, fecha: p.fecha || null }; });
+      peticion('PUT', null, datos.peliculas.length ? mapa : null);
+    }
     return true;
   }
 
@@ -460,21 +615,28 @@
     if (!p) return;
     p.fecha = fecha;
     seleccionId = null;
+    versionLocal++;
     guardar();
+    subir(p);
     render();
   }
   function borrar(id) {
     datos.peliculas = datos.peliculas.filter((p) => p.id !== id);
     seleccionId = null;
+    versionLocal++;
     guardar();
+    bajarUna(id);
     render();
   }
   function agregarPelicula() {
     const titulo = inpPeli.value.trim().slice(0, 60).toLocaleUpperCase('es');
     if (!titulo) return;
-    datos.peliculas.push({ id: nuevoId(), titulo: titulo, fecha: null });
+    const p = { id: nuevoId(), titulo: titulo, fecha: null };
+    datos.peliculas.push(p);
     inpPeli.value = '';
+    versionLocal++;
     guardar();
+    subir(p);
     render();
   }
 
@@ -497,6 +659,8 @@
     t.textContent = p.titulo;
     el.appendChild(t);
     el.addEventListener('pointerdown', alPresionarChip);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());   // evita el menu de la pulsacion larga
+    el.addEventListener('dragstart', (e) => e.preventDefault());
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       if (performance.now() < bloqueoClick) return;
@@ -563,8 +727,8 @@
   function renderLista() {
     const scroll = listaEl.scrollTop;
     listaEl.textContent = '';
-    const pendientes = datos.peliculas.filter((p) => !p.fecha);
-    if (!pendientes.length) {
+    const pendientesLista = datos.peliculas.filter((p) => !p.fecha);
+    if (!pendientesLista.length) {
       const v = document.createElement('div');
       v.className = 'cal-vacio';
       v.textContent = datos.peliculas.length
@@ -572,7 +736,7 @@
         : 'Aún no hay películas. Escribe un nombre arriba y toca Agregar.';
       listaEl.appendChild(v);
     }
-    pendientes.forEach((p) => listaEl.appendChild(crearChip(p, false)));
+    pendientesLista.forEach((p) => listaEl.appendChild(crearChip(p, false)));
     listaEl.scrollTop = scroll;
   }
 
@@ -588,7 +752,7 @@
     ayudaEl.textContent = '';
     const sel = seleccionId ? buscar(seleccionId) : null;
     if (!sel) {
-      ayudaEl.textContent = 'Arrastra una película a un día, o tócala y luego toca el día.';
+      ayudaEl.textContent = 'Arrastra una película a un día (en el celular, mantenla presionada un momento), o tócala y luego toca el día.';
       return;
     }
     const linea = document.createElement('div');
@@ -677,6 +841,7 @@
     }
   });
   $('calJsonAplicar').addEventListener('click', () => {
+    if (REMOTO && !window.confirm('Esto REEMPLAZA las películas que ven todos. ¿Seguro?')) return;
     if (importarJSON(jsonTexto.value)) {
       jsonMsg.textContent = 'Cargado: ' + datos.peliculas.length + ' película(s).';
     } else {
@@ -684,21 +849,58 @@
     }
   });
 
-  /* ---------- 7. Arrastrar y soltar (mouse y tactil, con pointer events) --- */
+  /* ---------- 7. Arrastrar y soltar (mouse y tactil, con pointer events) ---
+     - Mouse: arrastra al mover unos pixeles.
+     - Tactil: en el asa (≡) o en una pelicula ya puesta en un dia, arrastra
+       al instante. En la lista, mantener presionado ~0.2 s activa el arrastre
+       (si mueves el dedo antes, es scroll normal). Un toque corto selecciona.
+     ----------------------------------------------------------------------- */
   const UMBRAL_ARRASTRE = 6;
+  const ESPERA_LARGA = 220;     // ms de pulsacion larga en tactil
+  const TOLERANCIA_LARGA = 10;  // px que puede moverse el dedo durante la espera
   let arrastre = null;
+
+  // Evita que la pagina haga scroll mientras se arrastra (iOS/Android)
+  window.addEventListener('touchmove', (e) => {
+    if (arrastre && arrastre.activo && e.cancelable) e.preventDefault();
+  }, { passive: false });
 
   function alPresionarChip(e) {
     if (arrastre) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     const chip = e.currentTarget;
-    if (e.pointerType !== 'mouse' && chip.classList.contains('en-lista') && !e.target.closest('.cal-asa')) return;
     const p = buscar(chip.dataset.id);
     if (!p) return;
-    arrastre = { id: p.id, titulo: p.titulo, x0: e.clientX, y0: e.clientY, pid: e.pointerId, activo: false, fantasma: null };
+    const inmediato = e.pointerType === 'mouse' || chip.classList.contains('en-dia') || !!e.target.closest('.cal-asa');
+    arrastre = {
+      id: p.id, titulo: p.titulo, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY,
+      pid: e.pointerId, activo: false, fantasma: null, timer: null, largo: !inmediato
+    };
+    if (arrastre.largo) {
+      arrastre.timer = setTimeout(() => {
+        if (arrastre && !arrastre.activo) activarArrastre();
+      }, ESPERA_LARGA);
+    }
     window.addEventListener('pointermove', alMoverArrastre);
     window.addEventListener('pointerup', alSoltarArrastre);
     window.addEventListener('pointercancel', cancelarArrastre);
+  }
+
+  function activarArrastre() {
+    arrastre.activo = true;
+    const f = document.createElement('div');
+    f.className = 'cal-fantasma';
+    f.textContent = arrastre.titulo;
+    document.body.appendChild(f);
+    arrastre.fantasma = f;
+    moverFantasma();
+    try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) { /* ignorar */ }
+  }
+  function moverFantasma() {
+    arrastre.fantasma.style.transform = 'translate(' + (arrastre.x + 12) + 'px,' + (arrastre.y - 18) + 'px)';
+    limpiarResaltado();
+    const z = zonaBajo(arrastre.x, arrastre.y);
+    if (z) z.el.classList.add('sobre');
   }
 
   function zonaBajo(x, y) {
@@ -716,26 +918,29 @@
 
   function alMoverArrastre(e) {
     if (!arrastre || e.pointerId !== arrastre.pid) return;
+    arrastre.x = e.clientX;
+    arrastre.y = e.clientY;
     if (!arrastre.activo) {
-      if (Math.hypot(e.clientX - arrastre.x0, e.clientY - arrastre.y0) < UMBRAL_ARRASTRE) return;
-      arrastre.activo = true;
-      const f = document.createElement('div');
-      f.className = 'cal-fantasma';
-      f.textContent = arrastre.titulo;
-      document.body.appendChild(f);
-      arrastre.fantasma = f;
+      const dist = Math.hypot(e.clientX - arrastre.x0, e.clientY - arrastre.y0);
+      if (arrastre.largo) {
+        if (dist > TOLERANCIA_LARGA) cancelarArrastre();   // el dedo se movio antes: es scroll
+        return;
+      }
+      if (dist < UMBRAL_ARRASTRE) return;
+      activarArrastre();
+      return;
     }
-    arrastre.fantasma.style.transform = 'translate(' + (e.clientX + 12) + 'px,' + (e.clientY - 18) + 'px)';
-    limpiarResaltado();
-    const z = zonaBajo(e.clientX, e.clientY);
-    if (z) z.el.classList.add('sobre');
+    moverFantasma();
   }
 
   function terminarSeguimiento() {
     window.removeEventListener('pointermove', alMoverArrastre);
     window.removeEventListener('pointerup', alSoltarArrastre);
     window.removeEventListener('pointercancel', cancelarArrastre);
-    if (arrastre && arrastre.fantasma) arrastre.fantasma.remove();
+    if (arrastre) {
+      clearTimeout(arrastre.timer);
+      if (arrastre.fantasma) arrastre.fantasma.remove();
+    }
     limpiarResaltado();
   }
   function alSoltarArrastre(e) {
@@ -1077,11 +1282,11 @@
   }
 
   /* =====================================================================
-     9. EXPLOSION + CARA DE SCREAM + SONIDO
+     9. AUDIO: contexto, MUSICA (con reverb suave), EXPLOSION + SONIDO
      ===================================================================== */
   let audio = null;
-  function obtenerAudio() {
-    if (!SONIDO) return null;
+  // Contexto de audio compartido (la musica lo usa aunque SONIDO sea false)
+  function ctxAudio() {
     if (!audio) {
       const A = window.AudioContext || window.webkitAudioContext;
       if (!A) return null;
@@ -1090,8 +1295,10 @@
     if (audio.state === 'suspended') audio.resume().catch(function () {});
     return audio;
   }
-  // El navegador solo permite sonido despues de un toque: lo "desbloqueamos" en el primero.
-  document.addEventListener('pointerdown', function () { if (activo) obtenerAudio(); }, { passive: true });
+  function obtenerAudio() {
+    if (!SONIDO) return null;
+    return ctxAudio();
+  }
 
   // Reverb sintetica: ruido con caida exponencial (cola larga y suave)
   function crearReverb(a, segundos, caida) {
@@ -1105,6 +1312,75 @@
     cv.buffer = buf;
     return cv;
   }
+
+  /* ----- Musica de fondo ----- */
+  let musica = null;            // { el }
+  let musicaPendiente = false;  // el navegador bloqueo el autoplay: reintentar en el siguiente toque
+
+  function intentarReproducir() {
+    if (!musica) return;
+    const pr = musica.el.play();
+    if (pr && pr.then) {
+      pr.then(function () { musicaPendiente = false; })
+        .catch(function () { musicaPendiente = true; });
+    }
+  }
+
+  function iniciarMusica() {
+    if (!MUSICA || !MUSICA_URL) return;
+    if (!musica) {
+      const el = new Audio(MUSICA_URL);
+      el.loop = true;
+      el.preload = 'auto';
+      musica = { el: el };
+      const a = ctxAudio();
+      if (a) {
+        try {
+          const fuente = a.createMediaElementSource(el);
+          const master = a.createGain();
+          master.gain.value = MUSICA_VOL;
+          master.connect(a.destination);
+
+          const seco = a.createGain();            // sonido directo
+          seco.gain.value = 1;
+          fuente.connect(seco);
+          seco.connect(master);
+
+          const reverb = crearReverb(a, 1.8, 3);  // cola corta y suave
+          const filtro = a.createBiquadFilter();  // oscurece un poco la cola para que sea elegante
+          filtro.type = 'lowpass';
+          filtro.frequency.value = 5000;
+          const mojado = a.createGain();
+          mojado.gain.value = MUSICA_REVERB;
+          fuente.connect(reverb);
+          reverb.connect(filtro);
+          filtro.connect(mojado);
+          mojado.connect(master);
+        } catch (err) {
+          el.volume = MUSICA_VOL;                 // sin Web Audio: suena normal, sin reverb
+        }
+      } else {
+        el.volume = MUSICA_VOL;
+      }
+    }
+    try { musica.el.currentTime = 0; } catch (err) { /* ignorar */ }
+    ctxAudio();
+    intentarReproducir();
+  }
+  function detenerMusica() {
+    musicaPendiente = false;
+    if (musica) {
+      musica.el.pause();
+      try { musica.el.currentTime = 0; } catch (err) { /* ignorar */ }
+    }
+  }
+
+  // El navegador solo permite sonido despues de un toque: lo "desbloqueamos" en el primero.
+  document.addEventListener('pointerdown', function () {
+    if (!activo) return;
+    obtenerAudio();
+    if (musicaPendiente) { ctxAudio(); intentarReproducir(); }
+  }, { passive: true });
 
   // BUM etereo: golpe grave profundo + cola de reverb + campanas fantasmales + soplo de aire
   function sonarBoom() {
@@ -1198,6 +1474,7 @@
     v.start(t + 0.05);
   }
 
+  /* ----- Explosion visual ----- */
   const cb = lienzoBoom.getContext('2d');
   let rafBoom = null;
 
@@ -1217,26 +1494,33 @@
         l: azar(10, tam * 0.2), c: cols[i % cols.length]
       });
     }
-    const t0 = performance.now();
+
+    // FIX: el tiempo se mide desde el primer cuadro de ESTA animacion y nunca
+    // es negativo (antes arc() recibia un radio negativo, lanzaba error y la
+    // animacion moria en silencio: por eso a veces no se veian las particulas).
+    let t0 = null;
     function paso(ahora) {
-      const t = (ahora - t0) / 1000;
+      if (t0 === null) t0 = ahora;
+      const t = Math.max(0, (ahora - t0) / 1000);
       cb.setTransform(dpr, 0, 0, dpr, 0, 0);
       cb.clearRect(0, 0, AW, AH);
       if (t > 1.3) { lienzoBoom.style.display = 'none'; rafBoom = null; return; }
+      rafBoom = requestAnimationFrame(paso);   // se agenda ANTES de dibujar: un error no la mata
       cb.globalCompositeOperation = 'lighter';
       cb.lineCap = 'round';
       // onda expansiva
+      const radioOnda = Math.max(0.1, t * Math.max(AW, AH) * 0.9);
       cb.strokeStyle = rgba([255, 170, 70], Math.max(0, 1 - t / 0.6) * 0.85);
       cb.lineWidth = 8;
       cb.beginPath();
-      cb.arc(cx, cy, t * Math.max(AW, AH) * 0.9, 0, TAU);
+      cb.arc(cx, cy, radioOnda, 0, TAU);
       cb.stroke();
       // pedazos de neon
       const alfa = Math.max(0, 1 - t / 1.2);
       piezas.forEach((p) => {
         const x = cx + p.vx * t, y = cy + p.vy * t + 700 * t * t;
-        const a = p.r + p.vr * t;
-        const dx = Math.cos(a) * p.l, dy = Math.sin(a) * p.l;
+        const ang = p.r + p.vr * t;
+        const dx = Math.cos(ang) * p.l, dy = Math.sin(ang) * p.l;
         cb.strokeStyle = rgba(p.c, alfa * 0.3);
         cb.lineWidth = 9;
         cb.beginPath(); cb.moveTo(x - dx, y - dy); cb.lineTo(x + dx, y + dy); cb.stroke();
@@ -1245,7 +1529,6 @@
         cb.beginPath(); cb.moveTo(x - dx, y - dy); cb.lineTo(x + dx, y + dy); cb.stroke();
       });
       cb.globalCompositeOperation = 'source-over';
-      rafBoom = requestAnimationFrame(paso);
     }
     if (rafBoom) cancelAnimationFrame(rafBoom);
     rafBoom = requestAnimationFrame(paso);
@@ -1436,13 +1719,16 @@
     botonCalabaza.classList.add('oculta');
     detener3D();
     sincronizarCabecera();
+    estado(true);
     render();
+    iniciarSync();                 // trae lo que agregaron otros y sigue escuchando
     panel.focus({ preventScroll: true });
     crearMurcielagos(true);
   }
   function cerrarCalendario() {
     cancelarArrastre();
     cerrarJson();
+    pararSync();
     quitarMurcielagos();
     seleccionId = null;
     panel.classList.remove('abierto');
@@ -1472,15 +1758,18 @@
     dirX = Math.random() < 0.5 ? -1 : 1;
     reiniciarLoco();
     arrancar3D();
+    iniciarMusica();               // suena la musica con un poquito de reverb
   }
   function detenerCalabaza() {
     activo = false;
     cancelarArrastre();
     cerrarJson();
+    pararSync();
     cancelarExplosion();
     quitarMurcielagos();
     seleccionId = null;
     detener3D();
+    detenerMusica();
     reiniciarLoco();
     panel.classList.remove('abierto');
     overlay.style.display = 'none';
@@ -1502,6 +1791,8 @@
   cargar();
   renderSemana();
   sincronizarCabecera();
+  estado(true);
+  cargarSemilla();
 
   window.CalabazaHalloween = {
     exportarJSON: exportarJSON,
@@ -1509,6 +1800,7 @@
     irA: irA,
     abrir: abrirCalendario,
     cerrar: cerrarCalendario,
+    sincronizar: sincronizar,
     aloquese: function () { if (activo && !explotando && !loco && !panel.classList.contains('abierto')) empezarLoco(); },
     explotar: explotar
   };
