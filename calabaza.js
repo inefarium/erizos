@@ -897,7 +897,10 @@
     try { if (navigator.vibrate) navigator.vibrate(15); } catch (err) { /* ignorar */ }
   }
   function moverFantasma() {
-    arrastre.fantasma.style.transform = 'translate(' + (arrastre.x + 12) + 'px,' + (arrastre.y - 18) + 'px)';
+    const ancho = arrastre.fantasma.offsetWidth;
+    const fx = Math.max(4, arrastre.x - 12 - ancho);
+    const fy = Math.max(4, arrastre.y - 18);
+    arrastre.fantasma.style.transform = 'translate(' + fx + 'px,' + fy + 'px)';
     limpiarResaltado();
     const z = zonaBajo(arrastre.x, arrastre.y);
     if (z) z.el.classList.add('sobre');
