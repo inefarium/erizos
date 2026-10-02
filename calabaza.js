@@ -57,8 +57,8 @@
   // ---- Musica ----
   const MUSICA = true;
   const MUSICA_URL = "./cirice_ghost.mp3";        // <-- pon aqui la ruta de TU cancion
-  const MUSICA_VOL = 0.6;                 // 0 a 1
-  const MUSICA_REVERB = 0.22;             // cantidad de reverb (0 = nada, 0.22 = poquito, 0.5 = mucho)
+  const MUSICA_VOL = 0.4;                 // 0 a 1
+  const MUSICA_REVERB = 0.30;             // cantidad de reverb (0 = nada, 0.22 = poquito, 0.5 = mucho)
 
   const ANIO_INICIAL = 2026;
   const MES_INICIAL = 9;           // 0 = enero ... 9 = octubre
