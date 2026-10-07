@@ -10,18 +10,16 @@
      <script src="calabaza.js"></script>
 
    Cambios de esta version:
+   - LISTA DE MUSICAS: puedes cambiar de cancion (carpeta musicas_hallowen)
+     SOLO desde dentro del calendario (selector + boton ♪ en la cabecera).
+     Todas las canciones pasan por la MISMA cadena de reverb, asi que el
+     nivel de reverb es identico al cambiar. La cancion elegida se recuerda.
    - CALENDARIO COMPARTIDO: las peliculas se guardan en Firebase Realtime
      Database (via REST, sin librerias). Todos ven lo mismo y se actualiza
      solo cada pocos segundos. Si no configuras FIREBASE_URL funciona en
      modo local (localStorage) y, si existe peliculas.json en tu proyecto,
      lo usa como lista inicial (solo lectura).
-   - FIX particulas: la explosion fallaba a veces porque el primer cuadro
-     podia tener tiempo negativo y arc() lanzaba error (mataba la animacion).
-     Ademas las particulas ahora van por encima de la cara de susto.
-   - FIX celular: se puede arrastrar desde cualquier parte de la pelicula
-     con pulsacion larga (~0.2 s); el scroll de la lista sigue funcionando.
-     El toque corto sigue seleccionando.
-   - MUSICA al entrar al tema, con un poquito de reverb.
+   - FIX particulas, FIX celular (pulsacion larga), MUSICA con reverb.
 
    Formato del JSON (peliculas.json / boton { }):
      { "version": 1, "peliculas": [ { "id": "p1", "titulo": "Scream", "fecha": "2026-10-31" } ] }
@@ -33,6 +31,7 @@
      window.CalabazaHalloween.aloquese()        // fuerza un ataque de locura
      window.CalabazaHalloween.explotar()        // fuerza la explosion
      window.CalabazaHalloween.sincronizar()     // fuerza una lectura de la nube
+     window.CalabazaHalloween.musica(1)         // elige la cancion n.º 1 (0 = primera)
    ===================================================================== */
 
 (function () {
@@ -56,9 +55,17 @@
 
   // ---- Musica ----
   const MUSICA = true;
-  const MUSICA_URL = "./cirice_ghost.mp3";        // <-- pon aqui la ruta de TU cancion
+  // Lista de canciones (la carpeta es musicas_hallowen, junto a tu index.html).
+  // Agrega o quita lineas a gusto: { nombre: 'lo que se ve en el selector', url: 'ruta' }
+  const MUSICAS = [
+    { nombre: 'Cirice Ghost',    url: './musicas_hallowen/cirice_ghost.mp3' },
+    { nombre: 'Kidnap the Sandy', url: './musicas_hallowen/Kidnap_the_Sandy.mp3' },
+    { nombre: 'Sweet Dreams',    url: './musicas_hallowen/Sweet_Dreams.mp3' }
+  ];
+  const MUSICA_INICIAL = 0;               // cancion con la que arranca la primera vez (0 = primera)
+  const CLAVE_MUSICA = 'calabaza_musica_v1'; // para recordar la ultima cancion elegida
   const MUSICA_VOL = 0.25;                 // 0 a 1
-  const MUSICA_REVERB = 0.45;             // cantidad de reverb (0 = nada, 0.22 = poquito, 0.5 = mucho)
+  const MUSICA_REVERB = 0.48;             // cantidad de reverb (0 = nada, 0.22 = poquito, 0.5 = mucho)
 
   const ANIO_INICIAL = 2026;
   const MES_INICIAL = 9;           // 0 = enero ... 9 = octubre
@@ -261,6 +268,19 @@
     .cal-select:focus-visible, .cal-anio:focus-visible, .cal-input:focus-visible,
     .cal-json textarea:focus-visible { outline: 2px solid #ff00c8; outline-offset: 1px; }
 
+    /* Selector de musica (solo dentro del calendario) */
+    .cal-musica-grupo { display: flex; align-items: center; gap: 4px; min-width: 0; }
+    .cal-select.cal-musica {
+      font-size: 0.95rem; max-width: 170px; text-overflow: ellipsis;
+      color: #d28bff; border-color: #b46eff; background: rgba(180,110,255,0.09);
+      text-shadow: 0 0 6px rgba(180,110,255,0.7);
+    }
+    .cal-select.cal-musica option { color: #d28bff; }
+    .cal-btn.cal-musica-sig { color: #d28bff; border-color: rgba(180,110,255,0.7); background: rgba(180,110,255,0.09); }
+    .cal-btn.cal-musica-sig:hover, .cal-btn.cal-musica-sig:focus-visible {
+      background: rgba(180,110,255,0.22); box-shadow: 0 0 8px rgba(180,110,255,0.6);
+    }
+
     .cal-cuerpo { flex: 1 1 0; min-height: 0; display: flex; gap: 10px; }
     .cal-calendario { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
     .cal-semana { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; margin-bottom: 3px; }
@@ -362,6 +382,7 @@
       .cal-peli.en-dia { font-size: 0.72rem; }
       .cal-btn { min-width: 38px; height: 38px; padding: 0 10px; font-size: 1rem; }
       .cal-select, .cal-anio { height: 38px; font-size: 1.05rem; }
+      .cal-select.cal-musica { font-size: 0.85rem; max-width: 130px; }
       .cal-anio { width: 84px; }
     }
   `;
@@ -388,6 +409,10 @@
         <input class="cal-anio" id="calAnio" type="number" inputmode="numeric" aria-label="Año">
         <button class="cal-btn" id="calNext" aria-label="Mes siguiente">▶</button>
         <button class="cal-btn" id="calHoy">Hoy</button>
+        <span class="cal-musica-grupo" id="calMusicaGrupo">
+          <select class="cal-select cal-musica" id="calMusica" aria-label="Canción de fondo"></select>
+          <button class="cal-btn cal-musica-sig" id="calMusicaSig" aria-label="Siguiente canción" title="Siguiente canción">♪</button>
+        </span>
         <span class="cal-espacio"></span>
         <span class="cal-estado" id="calEstado" aria-live="polite"></span>
         <button class="cal-btn" id="calJsonBtn" aria-label="Ver o cargar JSON">{ }</button>
@@ -441,6 +466,9 @@
   const jsonTexto = $('calJsonTexto');
   const jsonMsg = $('calJsonMsg');
   const estadoEl = $('calEstado');
+  const selMusica = $('calMusica');
+  const btnMusicaSig = $('calMusicaSig');
+  const grupoMusica = $('calMusicaGrupo');
 
   /* ---------- 3. DATOS (peliculas + JSON + nube) -------------------------- */
   let datos = { version: 1, peliculas: [] };
@@ -483,7 +511,7 @@
       estadoEl.className = 'cal-estado local';
       estadoEl.title = 'Solo se guarda en este dispositivo (falta configurar FIREBASE_URL)';
     } else if (ok) {
-     
+
       estadoEl.className = 'cal-estado';
       estadoEl.title = 'Todos ven las mismas películas';
     } else {
@@ -774,6 +802,7 @@
   function sincronizarCabecera() {
     selMes.value = String(vistaMes);
     inpAnio.value = String(vistaAnio);
+    selMusica.value = String(musicaIdx);
   }
   function render() {
     renderCalendario();
@@ -1285,7 +1314,7 @@
   }
 
   /* =====================================================================
-     9. AUDIO: contexto, MUSICA (con reverb suave), EXPLOSION + SONIDO
+     9. AUDIO: contexto, MUSICA (lista + reverb suave), EXPLOSION + SONIDO
      ===================================================================== */
   let audio = null;
   // Contexto de audio compartido (la musica lo usa aunque SONIDO sea false)
@@ -1316,9 +1345,33 @@
     return cv;
   }
 
-  /* ----- Musica de fondo ----- */
+  /* ----- Musica de fondo -----
+     Hay UN solo elemento <audio> conectado UNA vez a la cadena de reverb.
+     Al cambiar de cancion solo se cambia su "src": la cadena (y por tanto
+     el nivel de reverb) es exactamente la misma para todas las canciones. */
   let musica = null;            // { el }
   let musicaPendiente = false;  // el navegador bloqueo el autoplay: reintentar en el siguiente toque
+  let musicaIdx = 0;            // cancion elegida
+
+  // Recordar la ultima cancion elegida
+  (function () {
+    let i = MUSICA_INICIAL;
+    try {
+      const g = parseInt(localStorage.getItem(CLAVE_MUSICA), 10);
+      if (isFinite(g)) i = g;
+    } catch (err) { /* ignorar */ }
+    musicaIdx = (i >= 0 && i < MUSICAS.length) ? i : 0;
+  })();
+
+  // Llenar el selector del calendario
+  MUSICAS.forEach((m, i) => {
+    const o = document.createElement('option');
+    o.value = String(i);
+    o.textContent = '♪ ' + m.nombre;
+    selMusica.appendChild(o);
+  });
+  // Si hay menos de 2 canciones o la musica esta apagada, no se muestra el control
+  if (!MUSICA || MUSICAS.length < 2) grupoMusica.style.display = 'none';
 
   function intentarReproducir() {
     if (!musica) return;
@@ -1330,11 +1383,14 @@
   }
 
   function iniciarMusica() {
-    if (!MUSICA || !MUSICA_URL) return;
+    if (!MUSICA || !MUSICAS.length) return;
     if (!musica) {
-      const el = new Audio(MUSICA_URL);
+      const el = new Audio(MUSICAS[musicaIdx].url);
       el.loop = true;
       el.preload = 'auto';
+      el.addEventListener('error', function () {
+        console.warn('[calabaza] no se pudo cargar la cancion:', MUSICAS[musicaIdx].url);
+      });
       musica = { el: el };
       const a = ctxAudio();
       if (a) {
@@ -1370,6 +1426,26 @@
     ctxAudio();
     intentarReproducir();
   }
+
+  // Cambiar de cancion (solo se llama desde los controles del calendario)
+  function cambiarMusica(i) {
+    if (!MUSICAS.length) return;
+    const n = MUSICAS.length;
+    musicaIdx = ((parseInt(i, 10) % n) + n) % n;
+    try { localStorage.setItem(CLAVE_MUSICA, String(musicaIdx)); } catch (err) { /* ignorar */ }
+    selMusica.value = String(musicaIdx);
+    if (!MUSICA) return;
+    if (!musica) { iniciarMusica(); return; }
+    // Mismo elemento y misma cadena de reverb: solo cambia el archivo
+    musica.el.src = MUSICAS[musicaIdx].url;
+    try { musica.el.currentTime = 0; } catch (err) { /* ignorar */ }
+    ctxAudio();
+    intentarReproducir();
+  }
+
+  selMusica.addEventListener('change', () => cambiarMusica(selMusica.value));
+  btnMusicaSig.addEventListener('click', () => cambiarMusica(musicaIdx + 1));
+
   function detenerMusica() {
     musicaPendiente = false;
     if (musica) {
@@ -1498,9 +1574,7 @@
       });
     }
 
-    // FIX: el tiempo se mide desde el primer cuadro de ESTA animacion y nunca
-    // es negativo (antes arc() recibia un radio negativo, lanzaba error y la
-    // animacion moria en silencio: por eso a veces no se veian las particulas).
+    // El tiempo se mide desde el primer cuadro de ESTA animacion y nunca es negativo.
     let t0 = null;
     function paso(ahora) {
       if (t0 === null) t0 = ahora;
@@ -1761,7 +1835,7 @@
     dirX = Math.random() < 0.5 ? -1 : 1;
     reiniciarLoco();
     arrancar3D();
-    iniciarMusica();               // suena la musica con un poquito de reverb
+    iniciarMusica();               // suena la ultima cancion elegida, con su poquito de reverb
   }
   function detenerCalabaza() {
     activo = false;
@@ -1804,6 +1878,7 @@
     abrir: abrirCalendario,
     cerrar: cerrarCalendario,
     sincronizar: sincronizar,
+    musica: cambiarMusica,
     aloquese: function () { if (activo && !explotando && !loco && !panel.classList.contains('abierto')) empezarLoco(); },
     explotar: explotar
   };
