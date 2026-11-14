@@ -1,0 +1,191 @@
+body {
+  margin: 0;
+  background: #000;
+  height: 100vh;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.contenedor {
+  text-align: center;
+  padding: 2rem;
+}
+
+h1 {
+  font-size: clamp(2rem, 6vw, 4rem);
+  color: #0ff;
+  text-shadow:
+    0 0 5px #0ff,
+    0 0 15px #0ff,
+    0 0 30px #0ff;
+  margin: 0.3em 0;
+  cursor: pointer;
+  letter-spacing: 2px;
+  position: relative;
+  user-select: none;
+  transition: transform 0.1s;
+}
+
+h1.pink {
+  color: #ff00c8;
+  text-shadow:
+    0 0 5px #ff00c8,
+    0 0 15px #ff00c8,
+    0 0 30px #ff00c8;
+}
+
+h1.glitch { animation: glitchAnim 0.3s linear; }
+
+h1.glitch::before,
+h1.glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+  clip-path: inset(0 0 90% 0);
+}
+
+h1.glitch::before {
+  color: #ff00c8;
+  clip-path: inset(0 0 90% 0);
+  animation: glitchTop 0.3s linear;
+}
+
+h1.glitch::after {
+  color: #0ff;
+  clip-path: inset(90% 0 0 0);
+  animation: glitchBottom 0.3s linear;
+}
+
+@keyframes glitchAnim {
+  0%   { transform: translate(0, 0); }
+  20%  { transform: translate(-4px, 2px); }
+  40%  { transform: translate(4px, -2px); }
+  60%  { transform: translate(-3px, -1px); }
+  80%  { transform: translate(3px, 1px); }
+  100% { transform: translate(0, 0); }
+}
+
+@keyframes glitchTop {
+  0%   { clip-path: inset(0 0 90% 0); transform: translate(0, 0); }
+  20%  { clip-path: inset(10% 0 70% 0); transform: translate(-5px, -2px); }
+  40%  { clip-path: inset(40% 0 40% 0); transform: translate(5px, 2px); }
+  60%  { clip-path: inset(70% 0 10% 0); transform: translate(-3px, 1px); }
+  80%  { clip-path: inset(20% 0 60% 0); transform: translate(3px, -1px); }
+  100% { clip-path: inset(0 0 90% 0); transform: translate(0, 0); }
+}
+
+@keyframes glitchBottom {
+  0%   { clip-path: inset(90% 0 0 0); transform: translate(0, 0); }
+  20%  { clip-path: inset(70% 0 10% 0); transform: translate(5px, 2px); }
+  40%  { clip-path: inset(40% 0 40% 0); transform: translate(-5px, -2px); }
+  60%  { clip-path: inset(10% 0 70% 0); transform: translate(3px, -1px); }
+  80%  { clip-path: inset(60% 0 20% 0); transform: translate(-3px, 1px); }
+  100% { clip-path: inset(90% 0 0 0); transform: translate(0, 0); }
+}
+
+.chispa {
+  position: fixed;
+  pointer-events: none;
+  font-size: 1.2rem;
+  font-weight: bold;
+  opacity: 1;
+  animation: subir 0.8s ease-out forwards;
+  z-index: 30;
+}
+
+@keyframes subir {
+  0%   { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateY(-60px) scale(1.5); opacity: 0; }
+}
+
+/* ===================== ESCENA DEL CORAZON 3D ===================== */
+.escena-corazon {
+  position: fixed;
+  width: clamp(130px, 20vw, 230px);
+  height: clamp(130px, 20vw, 230px);
+  z-index: 15;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.escena-corazon.oculto {
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+
+.estrella {
+  position: absolute;
+  color: #ff00c8;
+  text-shadow: 0 0 4px #ff00c8, 0 0 10px #ff00c8;
+  font-size: 1rem;
+  pointer-events: none;
+  animation: titilar 1.6s ease-in-out infinite;
+}
+
+@keyframes titilar {
+  0%, 100% { opacity: 0.25; transform: scale(0.7) rotate(0deg); }
+  50%      { opacity: 1;    transform: scale(1.15) rotate(8deg); }
+}
+
+.corazon-flotante {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  z-index: 2;
+  filter: drop-shadow(0 0 1.5px #ff00c8) drop-shadow(0 0 5px #ff00c8);
+  animation: latido 1.8s ease-in-out infinite;
+}
+
+@keyframes latido {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.06); }
+}
+
+#canvasCorazon {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ===================== MENSAJE FLOTANTE ===================== */
+.mensaje-flotante {
+  position: fixed;
+  transform: translate(-50%, -100%);
+  background: rgba(0, 0, 0, 0.75);
+  border: 1px solid #0ff;
+  color: #0ff;
+  text-shadow: 0 0 5px #0ff, 0 0 12px #0ff;
+  font-family: 'Courier New', monospace;
+  font-size: clamp(0.85rem, 2.2vw, 1.1rem);
+  letter-spacing: 1px;
+  padding: 0.6em 1em;
+  border-radius: 4px;
+  white-space: nowrap;
+  max-width: 80vw;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 20;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.mensaje-flotante.mostrar {
+  opacity: 1;
+  transform: translate(-50%, -130%);
+}
