@@ -16,5 +16,27 @@ declare global {
       listaTemas: HTMLElement;
     };
     CalabazaHalloween?: Record<string, (...args: unknown[]) => unknown>;
+    NavidadChamoys?: {
+      activar: () => void;
+      desactivar: () => void;
+      adornos: () => number;
+      activo: () => boolean;
+      registros: () => Array<{
+        id: string;
+        tipo: string;
+        color: string;
+        x: number;
+        y: number;
+        z: number;
+        rotY: number;
+        rotZ: number;
+        escala: number;
+        creado: string;
+      }>;
+      sincronizar: () => Promise<boolean>;
+      configurarNube: (url: string) => string;
+      estrellaPermitida: () => boolean;
+      nube: () => { url: string; pendientes: number };
+    };
   }
 }

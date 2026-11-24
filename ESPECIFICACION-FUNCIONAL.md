@@ -4,9 +4,9 @@
 | --- | --- |
 | Proyecto | INEFARIUM / erizos |
 | Tipo de documento | Especificación funcional (SDD - Specification-Driven Development) |
-| Versión | 1.0 |
-| Fecha | 2026-11-14 |
-| Estado | Línea base del código actual |
+| Versión | 1.1 |
+| Fecha | 2026-11-23 |
+| Estado | Tema Navidad con persistencia Cloudflare implementado |
 | Repositorio | https://github.com/inefarium/erizos |
 | Alcance del documento | Comportamiento funcional, datos, configuración y criterios de aceptación del sitio actual |
 
@@ -37,7 +37,7 @@ Principios de diseño:
 - Tipografía monoespaciada (`Courier New`).
 - Efectos tipo holograma: brillo, líneas de escaneo, parpadeo, glitch.
 - Interacciones simples (toque/click) con reacciones visuales y sonoras.
-- Sin frameworks ni proceso de build: HTML, CSS y JavaScript del lado del cliente.
+- React 19 + TypeScript + Vite, con temas legacy en JavaScript del lado del cliente.
 - Contenido personal editable mediante constantes/listas en el código.
 
 ---
@@ -49,19 +49,19 @@ Principios de diseño:
 - Pantalla principal con títulos animados y corazón 3D interactivo.
 - Menú de "Conmemoraciones Inefarium" con temas exclusivos.
 - Temas base: Lluvia Codificada, Escáner Holográfico, Grid Neón, Partículas Etéreas, Mi Prenovia, Páginas Cósmicas.
-- Temas plugin: Regalo Cósmico, Florcita Amarilla, Calabaza Cyberpunk.
+- Temas plugin: Regalo Cósmico, Florcita Amarilla, Calabaza Cyberpunk, Navidad de Chamoys.
 - Libro de fotos holográfico (`libro.html`).
 - Página independiente de tarjeta holograma (`mi_prenovia.html`).
 - Calendario de películas de Halloween con sincronización opcional en Firebase Realtime Database.
 - Música de fondo local para el tema de Halloween.
 - Persistencia local en `localStorage` y, opcionalmente, en la nube.
+- Nube Cloudflare Worker + D1 para los adornos de Navidad de Chamoys.
 
 ### 3.2 Excluido
 
 - Autenticación de usuarios.
-- Backend propio o API server-side.
-- Proceso de build, bundler o gestor de paquetes.
-- Pruebas automatizadas.
+- Backend con autenticación o panel de administración; solo existe el Worker público de adornos.
+- Pruebas automatizadas versionadas en el repositorio.
 - Internacionalización (todo el contenido está en español).
 - Accesibilidad avanzada certificada.
 
@@ -103,7 +103,8 @@ Principios de diseño:
 - Canvas 2D para el resto de modelos 3D (regalo, flor, calabaza, partículas).
 - Web Audio API para sonidos sintetizados y reverb.
 - Firebase Realtime Database vía REST (`fetch`) para el calendario.
-- `localStorage` para caché y preferencias.
+- Cloudflare Worker + D1 vía REST (`fetch`) para los adornos de Navidad.
+- `localStorage` para caché, preferencias y cola de sincronización.
 
 ### 6.2 Estructura de archivos
 
@@ -122,6 +123,8 @@ erizos/
     themes/regalo-cosmico.js  Tema plugin: regalo 3D
     themes/florcita_amarilla.js Tema plugin: flor 3D
     themes/calabaza.js        Tema plugin: calabaza + calendario + música + nube
+    themes/navidad-chamoys.js Tema plugin: árbol holográfico + adornos + nieve + nube
+  worker/                     Worker Cloudflare + D1 de adornos de Navidad
   public/                     Copiado tal cual a dist/
     libro.html                Libro de fotos holográfico
     mi_prenovia.html          Página independiente de tarjeta holograma
@@ -137,7 +140,8 @@ erizos/
 3. `themes/regalo-cosmico.js` (requiere el núcleo).
 4. `themes/florcita_amarilla.js` (requiere el núcleo).
 5. `themes/calabaza.js` (requiere el núcleo).
-6. `App` de React (títulos y corazón 3D) sobre `#root`.
+6. `themes/navidad-chamoys.js` (requiere el núcleo).
+7. `App` de React (títulos y corazón 3D) sobre `#root`.
 
 Los plugins deben importarse **después** de `opciones-temas.js`; si no, muestran error en consola y no se registran.
 
@@ -147,6 +151,7 @@ Los plugins deben importarse **después** de `opciones-temas.js`; si no, muestra
 | --- | --- | --- |
 | Overlays de tema (lluvia, escáner, grid, partículas) | 3 | `opciones-temas.js` |
 | Fondo de calabaza | 3 | `calabaza.js` |
+| Navidad de Chamoys (cuarto, nieve, árbol) | 3 | `navidad-chamoys.js` |
 | Suelo de calabaza | 4 | `calabaza.js` |
 | Tarjeta Mi Prenovia / Regalo / Florcita | 4 | tema correspondiente |
 | Texto principal `.contenedor` | 5 | `opciones-temas.js` |
@@ -161,6 +166,8 @@ Los plugins deben importarse **después** de `opciones-temas.js`; si no, muestra
 | Menú de temas | 50 | `opciones-temas.js` |
 | Explosión de calabaza | 50-55 | `calabaza.js` |
 | Mensaje flotante del calendario | 60 | `calabaza.js` |
+| Adorno fantasma durante el arrastre | 80 | `navidad-chamoys.js` |
+| Aviso del tema Navidad | 90 | `navidad-chamoys.js` |
 
 Regla de composición: el texto principal siempre queda por encima de los overlays de tema, salvo efectos explícitamente pensados para pasar por encima (fuegos del regalo, mensajes, hojita, sorpresa).
 
@@ -235,7 +242,7 @@ Cada requisito indica prioridad: **Alta** (experiencia base), **Media** (funcion
 | RF-03.9 | Exponer `window.OpcionesTemas` con API de registro y utilidades del corazón | Alta |
 | RF-03.10 | Si un `desactivar()` falla, registrar el error y continuar con los demás | Media |
 
-**Temas base y orden:** Lluvia Codificada, Escáner Holográfico, Grid Neón, Partículas Etéreas, Mi Prenovia, Páginas Cósmicas. Los plugins se agregan al final (Regalo Cósmico, Florcita Amarilla, Calabaza Cyberpunk).
+**Temas base y orden:** Lluvia Codificada, Escáner Holográfico, Grid Neón, Partículas Etéreas, Mi Prenovia, Páginas Cósmicas. Los plugins se agregan al final (Regalo Cósmico, Florcita Amarilla, Calabaza Cyberpunk, Navidad de Chamoys).
 
 **API pública:**
 
@@ -420,38 +427,74 @@ window.CalabazaHalloween = {
 };
 ```
 
-### 7.13 RF-13 - Libro de fotos (`libro.html`)
+### 7.13 RF-13 - Tema "Navidad de Chamoys"
+
+**Objetivo:** árbol holográfico interactivo en un cuarto oscuro con luz cálida, nieve optimizada, adornos 3D arrastrables y persistencia local/nube.
+
+**Estados:** `inactivo` ↔ `activo`; dentro de activo, cada adorno puede estar `en catálogo`, `arrastrándose`, `colocado en el árbol` o `volviendo al catálogo`.
+
+| ID | Requisito | Prioridad |
+| --- | --- | --- |
+| RF-13.1 | Al activar, ocultar los títulos centrales y el corazón | Alta |
+| RF-13.2 | Mostrar un cuarto oscuro con brillos cálidos y nostálgicos | Media |
+| RF-13.3 | Hacer caer nieve holográfica cian/magenta/dorada usando sprites cacheados | Alta |
+| RF-13.4 | Mostrar un árbol 3D girando lentamente, con cuerpo translúcido y líneas frontales/traseras diferenciadas | Alta |
+| RF-13.5 | Mostrar un catálogo con 10 adornos: bola, estrella, campana, copo, regalo, lazo, caramelo, galleta, piña y vela | Alta |
+| RF-13.6 | Arrastrar adornos con mouse o táctil y resaltar la zona del árbol | Alta |
+| RF-13.7 | Al soltar sobre el árbol, el adorno queda pegado, gira con él y se coloca en la cara visible | Alta |
+| RF-13.8 | Al soltar fuera del árbol, el adorno vuelve animado a su botón del catálogo | Alta |
+| RF-13.9 | La estrella solo puede colocarse el 25 de diciembre; antes se muestra un aviso y no se coloca | Alta |
+| RF-13.10 | Solo puede existir una estrella en el árbol; al intentar otra se informa que ya está colocada | Media |
+| RF-13.11 | Guardar cada adorno en `localStorage` con id, tipo, color, posición, rotación, escala y fecha | Alta |
+| RF-13.12 | Sincronizar los adornos con Cloudflare D1 al activar, al recuperar visibilidad y tras colocarlos | Alta |
+| RF-13.13 | Si la nube falla, mantener el guardado local y reintentar los pendientes en la siguiente sincronización | Alta |
+| RF-13.14 | Restaurar los adornos guardados al recargar o en otro dispositivo conectado a la misma nube | Alta |
+| RF-13.15 | Limitar el árbol a 48 adornos y avisar cuando esté lleno | Baja |
+| RF-13.16 | Pausar las animaciones al desactivar el tema o al ocultar la pestaña | Media |
+| RF-13.17 | Al desactivar, restaurar títulos y corazón, cancelar arrastres y limpiar avisos | Alta |
+
+**Nube:**
+
+- Worker: `worker/src/index.js`; tabla D1 `adornos`.
+- Endpoints: `GET /salud`, `GET /adornos`, `POST /adornos`; CORS abierto.
+- La URL se toma de `VITE_NAVIDAD_NUBE_URL`, de `localStorage.navidad_nube_url` o de `configurarNube(url)`.
+- Sin URL o sin conexión: modo local; los adornos se mantienen y se encolan para subirlos después.
+- Si dos estrellas llegan de fuentes distintas, solo se restaura la primera.
+
+**API pública:** `window.NavidadChamoys = { activar(), desactivar(), adornos(), activo(), registros(), sincronizar(), configurarNube(url), estrellaPermitida(), nube() }`.
+
+### 7.14 RF-14 - Libro de fotos (`libro.html`)
 
 **Objetivo:** presentar fotos y mensajes en un libro 3D holográfico.
 
 | ID | Requisito | Prioridad |
 | --- | --- | --- |
-| RF-13.1 | Mostrar libro cerrado con portada "INEFARIUM" y subtítulo | Alta |
-| RF-13.2 | Al hacer click, abrir el libro con animación de portada | Alta |
-| RF-13.3 | Mostrar dos páginas por vista | Alta |
-| RF-13.4 | Navegar con botones "Anterior", "Siguiente" y "Cerrar libro" | Alta |
-| RF-13.5 | Navegar con teclado: flecha derecha, flecha izquierda, Escape | Media |
-| RF-13.6 | Cada página de foto muestra título, imagen y texto | Alta |
-| RF-13.7 | Deshabilitar botones en los extremos | Media |
-| RF-13.8 | Enlace "Volver" a `index.html` | Media |
-| RF-13.9 | Animación de aparición tipo holograma al cargar | Baja |
-| RF-13.10 | Diseño responsive para pantallas menores a 700 px | Media |
+| RF-14.1 | Mostrar libro cerrado con portada "INEFARIUM" y subtítulo | Alta |
+| RF-14.2 | Al hacer click, abrir el libro con animación de portada | Alta |
+| RF-14.3 | Mostrar dos páginas por vista | Alta |
+| RF-14.4 | Navegar con botones "Anterior", "Siguiente" y "Cerrar libro" | Alta |
+| RF-14.5 | Navegar con teclado: flecha derecha, flecha izquierda, Escape | Media |
+| RF-14.6 | Cada página de foto muestra título, imagen y texto | Alta |
+| RF-14.7 | Deshabilitar botones en los extremos | Media |
+| RF-14.8 | Enlace "Volver" a `index.html` | Media |
+| RF-14.9 | Animación de aparición tipo holograma al cargar | Baja |
+| RF-14.10 | Diseño responsive para pantallas menores a 700 px | Media |
 
 **Páginas actuales:** 11 entradas (inicio, 9 fotos, final). Se muestran de a pares; con número impar la última aparece sola.
 
 **Discrepancia conocida:** las fotos se titulan "Página I" a "Página X", pero falta la "Página V" y el pie numérico cuenta todas las páginas (incluida la intro), por lo que no coincide con el título.
 
-### 7.14 RF-14 - Página independiente `mi_prenovia.html`
+### 7.15 RF-15 - Página independiente `mi_prenovia.html`
 
 **Objetivo:** versión autónoma de la tarjeta holograma.
 
 | ID | Requisito | Prioridad |
 | --- | --- | --- |
-| RF-14.1 | Mostrar tarjeta "TRANSMISIÓN INEFARIUM" | Baja |
-| RF-14.2 | Aparecer subiendo desde abajo cada cierto tiempo aleatorio | Baja |
-| RF-14.3 | Derivar lentamente y rebotar en los bordes | Baja |
-| RF-14.4 | Ocultarse y reaparecer en ciclo | Baja |
-| RF-14.5 | Enlace "Volver" a `index.html` | Baja |
+| RF-15.1 | Mostrar tarjeta "TRANSMISIÓN INEFARIUM" | Baja |
+| RF-15.2 | Aparecer subiendo desde abajo cada cierto tiempo aleatorio | Baja |
+| RF-15.3 | Derivar lentamente y rebotar en los bordes | Baja |
+| RF-15.4 | Ocultarse y reaparecer en ciclo | Baja |
+| RF-15.5 | Enlace "Volver" a `index.html` | Baja |
 
 **Estado:** página huérfana (no está enlazada desde el sitio) y duplica funcionalidad del tema "Mi Prenovia".
 
@@ -511,6 +554,9 @@ abierto --(Cerrar/Escape)--> cerrado
 | --- | --- | --- |
 | `calabaza_calendario_v1` | JSON `{ version, peliculas[] }` | `calabaza.js` |
 | `calabaza_musica_v1` | Índice de la canción elegida | `calabaza.js` |
+| `navidad_chamoys_adornos_v1` | JSON con los adornos colocados | `navidad-chamoys.js` |
+| `navidad_chamoys_pendientes_v1` | IDs de adornos pendientes de subir | `navidad-chamoys.js` |
+| `navidad_nube_url` | URL manual del Worker de Navidad | `navidad-chamoys.js` |
 
 ### 9.2 Esquema de películas
 
@@ -544,6 +590,35 @@ calabaza/peliculas/<id> = { "titulo": "...", "fecha": "YYYY-MM-DD" | null }
 ### 9.4 Archivo semilla opcional
 
 `peliculas.json` en la raíz. Solo se usa en modo local (sin Firebase) y solo si no hay datos guardados. Actualmente no existe en el repositorio.
+
+### 9.5 Cloudflare D1 (adornos de Navidad)
+
+Tabla `adornos`:
+
+```sql
+CREATE TABLE adornos (
+  id TEXT PRIMARY KEY,
+  tipo TEXT NOT NULL,
+  color TEXT NOT NULL,
+  pos_x REAL NOT NULL,
+  pos_y REAL NOT NULL,
+  pos_z REAL NOT NULL,
+  rot_y REAL NOT NULL,
+  rot_z REAL NOT NULL,
+  escala REAL NOT NULL,
+  creado TEXT NOT NULL
+);
+```
+
+- `id`: UUID generado en el cliente; también acepta IDs alfanuméricos con `_` y `-`.
+- `tipo`: uno de los 10 adornos soportados.
+- `pos_x`, `pos_y`, `pos_z`: coordenadas locales dentro del grupo del árbol.
+- `rot_y`, `rot_z`: rotación local del adorno.
+- `escala`: escala base restaurada.
+- `creado`: ISO 8601.
+- Lectura: `GET /adornos` devuelve `{ adornos: [...] }`.
+- Escritura: `POST /adornos` inserta o actualiza por `id` (`ON CONFLICT`).
+- No hay endpoint público de borrado; el vaciado se hace con Wrangler.
 
 ---
 
@@ -600,6 +675,19 @@ calabaza/peliculas/<id> = { "titulo": "...", "fecha": "YYYY-MM-DD" | null }
 
 La lista `paginas` de `libro.html` define el contenido. Tipos soportados: `inicio`, `foto`, `final`.
 
+### 10.5 Navidad de Chamoys
+
+| Constante | Valor | Descripción |
+| --- | --- | --- |
+| `MAX_DPR` | 1.75 | Límite de densidad del canvas 3D |
+| `MAX_DPR_NIEVE` | 1.5 | Límite de densidad del canvas de nieve |
+| `VELOCIDAD_GIRO` | 0.12 rad/s | Giro del árbol |
+| `MAX_ADORNOS` | 48 | Cupo total del árbol |
+| `DURACION_NACIMIENTO` | 420 ms | Aparición de cada adorno |
+| `VITE_NAVIDAD_NUBE_URL` | vacío por defecto | URL del Worker D1 |
+| `navidad_nube_url` | vacío por defecto | Override manual en `localStorage` |
+| Fecha de estrella | 25 de diciembre | Se evalúa con la fecha local del navegador |
+
 ---
 
 ## 11. Requisitos no funcionales
@@ -621,6 +709,7 @@ La lista `paginas` de `libro.html` define el contenido. Tipos soportados: `inici
 
 - Three.js y React se empaquetan en el build (sin CDN).
 - Firebase (internet) para la sincronización del calendario; opcional.
+- Cloudflare Worker + D1 (internet) para los adornos de Navidad; opcional.
 - YouTube y `n9.cl` al pulsar enlaces externos.
 
 **Servido del sitio:** el proyecto se compila con `npm run build` y se publica `dist/` en GitHub Pages mediante el workflow. En desarrollo se usa `npm run dev`. Abrir el `index.html` de la raíz con `file://` ya no funciona, porque es la entrada de Vite.
@@ -640,6 +729,11 @@ La lista `paginas` de `libro.html` define el contenido. Tipos soportados: `inici
 | Fecha inválida | Se normaliza a `null`. |
 | Firebase no responde | Se conserva la copia local y se reintenta en el siguiente ciclo. |
 | Cambio local durante una lectura de la nube | La lectura vieja se descarta para no pisar cambios. |
+| Nube de Navidad no responde | Se conserva el guardado local, se marca "SIN CONEXIÓN · LOCAL" y los IDs quedan pendientes para el siguiente intento. |
+| Adorno remoto inválido o tipo desconocido | Se descarta ese registro y se conserva el resto. |
+| Estrella intentada antes del 25 de diciembre | No se coloca; se muestra un aviso y el fantasma vuelve al catálogo. |
+| Segunda estrella el 25 de diciembre | No se coloca; se avisa que la estrella ya está en la copa. |
+| WebGL no disponible | El tema mantiene DOM, nieve y catálogo, pero no crea la escena 3D. |
 | Pantalla demasiado pequeña para la flor | Se usa una posición válida al azar aunque se superponga. |
 | Doble toque en títulos/corazón | Se ignora el segundo evento en una ventana de tiempo. |
 | Click sobre el menú con un tema abierto | No pliega ni mueve el regalo; el menú gestiona el tema. |
@@ -699,6 +793,18 @@ Formato: dado un contexto, cuando ocurre una acción, entonces se obtiene un res
 - CA-28: Dado el libro abierto, cuando se pulsa Escape, entonces se cierra.
 - CA-29: Dado el libro en los extremos, entonces los botones correspondientes se deshabilitan.
 
+### 13.7 Navidad de Chamoys
+
+- CA-30: Dado el tema activo, entonces se ven el árbol, la nieve, el catálogo de 10 adornos y el estado de nube.
+- CA-31: Dado un adorno arrastrado dentro del árbol, cuando se suelta, entonces queda colocado, gira con el árbol y se guarda en local.
+- CA-32: Dado un adorno arrastrado fuera del árbol, cuando se suelta, entonces vuelve animado a su botón y no se añade.
+- CA-33: Dado un día distinto al 25 de diciembre, cuando se intenta colocar la estrella, entonces no se coloca y aparece el aviso correspondiente.
+- CA-34: Dado el 25 de diciembre, cuando se coloca la estrella, entonces queda en la copa y solo puede existir una.
+- CA-35: Dado un adorno guardado, cuando se recarga la página y se activa el tema, entonces reaparece en la misma posición.
+- CA-36: Dado el Worker configurado, cuando se coloca un adorno, entonces se envía a D1 y aparece en otro navegador tras sincronizar.
+- CA-37: Dado el Worker caído o sin URL, entonces el tema sigue funcionando en local y conserva pendientes.
+- CA-38: Dado que se desactiva el tema o se oculta la pestaña, entonces se pausan las animaciones y se limpian arrastres y avisos.
+
 ---
 
 ## 14. Inventario de assets
@@ -741,6 +847,8 @@ Peso total del proyecto: aproximadamente 43 MB (40.9 MB de audio y 2 MB de fotos
 | DT-12 | La animación del corazón sigue corriendo cuando está oculto | Rendimiento | `src/components/Corazon3D.tsx` |
 | DT-13 | Cada click crea nodos de audio que no se desconectan | Memoria a largo plazo | `src/lib/audio.ts` |
 | DT-14 | Erratas de contenido ("tube", "qerias") | Contenido | `public/libro.html` |
+| DT-15 | Worker de Navidad público sin autenticación; cualquiera con la URL puede leer y escribir adornos | Seguridad | `worker/src/index.js` |
+| DT-16 | `database_id` de D1 debe completarse y desplegarse manualmente antes de activar la nube | Configuración | `worker/wrangler.toml` |
 
 ---
 
@@ -774,6 +882,8 @@ Una modificación se considera terminada cuando:
 - No se introducen errores de sintaxis en los `.js`.
 - Los temas se pueden activar y desactivar sin dejar temporizadores, animaciones ni audio activos.
 - La experiencia funciona con mouse y con toque.
+- Los adornos de Navidad sobreviven a la recarga y, con URL configurada, se sincronizan con D1.
+- La cola local de Navidad no pierde pendientes cuando la nube falla.
 - Los assets referenciados existen y las rutas son correctas.
 - La consola del navegador no muestra errores nuevos.
 
@@ -784,3 +894,4 @@ Una modificación se considera terminada cuando:
 | Versión | Fecha | Descripción |
 | --- | --- | --- |
 | 1.0 | 2026-11-14 | Línea base funcional del proyecto a partir del código actual |
+| 1.1 | 2026-11-23 | Navidad de Chamoys: árbol sólido y frontal, 10 adornos, estrella bloqueada al 25 de diciembre, rendimiento y persistencia Cloudflare D1 |

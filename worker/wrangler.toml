@@ -1,0 +1,8 @@
+name = "inefarium-navidad"
+main = "src/index.js"
+compatibility_date = "2026-11-23"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "inefarium-navidad"
+database_id = "REEMPLAZA_CON_D1_DATABASE_ID"

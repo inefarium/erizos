@@ -6,6 +6,7 @@ import './themes/opciones-temas.js';
 import './themes/regalo-cosmico.js';
 import './themes/florcita_amarilla.js';
 import './themes/calabaza.js';
+import './themes/navidad-chamoys.js';
 
 import { createRoot } from 'react-dom/client';
 import App from './App';

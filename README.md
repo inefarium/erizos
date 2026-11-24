@@ -37,6 +37,30 @@ El `base` de Vite es relativo (`./`), así que funciona tanto en
 > Importante: ya no se publica el HTML de la raíz directamente. Pages debe
 > servir el artefacto generado por el workflow.
 
+## Nube de Navidad de Chamoys
+
+El tema **Navidad de Chamoys** incluye un árbol 3D, 10 adornos arrastrables,
+nieve holográfica y guardado local. La estrella solo se puede colocar el 25 de
+diciembre.
+
+Para compartir los adornos entre dispositivos se usa un Worker de Cloudflare
+con D1. Sigue [`worker/README.md`](./worker/README.md) para crear la base y
+desplegar la API. Después configura la variable de repositorio:
+
+```text
+VITE_NAVIDAD_NUBE_URL=https://inefarium-navidad.TU-SUBDOMINIO.workers.dev
+```
+
+En GitHub: **Settings → Secrets and variables → Actions → Variables**. El
+workflow la inyecta en el build. También puedes conectarla sin recompilar:
+
+```js
+window.NavidadChamoys.configurarNube('https://inefarium-navidad.TU-SUBDOMINIO.workers.dev');
+```
+
+Sin URL el tema funciona en modo local y deja pendientes para subirlos en la
+siguiente sincronización.
+
 ## Estructura
 
 ```text
@@ -61,12 +85,17 @@ erizos/
 │       ├── opciones-temas.js   Núcleo del menú y temas base
 │       ├── regalo-cosmico.js
 │       ├── florcita_amarilla.js
-│       └── calabaza.js
+│       ├── calabaza.js
+│       └── navidad-chamoys.js
 ├── public/                     Copiado tal cual a dist/
 │   ├── libro.html              Libro de fotos
 │   ├── mi_prenovia.html        Tarjeta independiente
 │   ├── fotos/
 │   └── musicas_hallowen/
+├── worker/                     API Cloudflare Worker + D1 para Navidad
+│   ├── src/index.js
+│   ├── schema.sql
+│   └── wrangler.toml
 └── .github/workflows/deploy.yml
 ```
 
