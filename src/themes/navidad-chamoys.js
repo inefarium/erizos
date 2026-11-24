@@ -19,7 +19,8 @@ import * as THREE from 'three';
   const MAX_ADORNOS = 48;
   const CLAVE_LOCAL = 'navidad_chamoys_adornos_v1';
   const CLAVE_PENDIENTES = 'navidad_chamoys_pendientes_v1';
-  const CLAVE_NUBE = 'navidad_nube_url';
+  const NUBE_BASE = 'https://calabazainefarium-default-rtdb.firebaseio.com';
+  const NUBE_RUTA = 'calabaza/navidad/adornos';
   const LADO_COPO = 64;
   const RADIO_COPO = 24;
 
@@ -331,20 +332,6 @@ import * as THREE from 'three';
     }
     return true;
   }
-
-  function normalizarUrlNube(valor) {
-    const limpio = String(valor || '').trim().replace(/\/+$/, '');
-    if (!limpio) return '';
-    try {
-      const url = new URL(limpio);
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
-      return url.toString().replace(/\/+$/, '');
-    } catch (error) {
-      return '';
-    }
-  }
-
-  let nubeUrl = normalizarUrlNube(leerAlmacen(CLAVE_NUBE) || import.meta.env.VITE_NAVIDAD_NUBE_URL || '');
 
   const azar = (min, max) => min + Math.random() * (max - min);
   const limitar = (v, min, max) => Math.min(Math.max(v, min), max);
@@ -1459,25 +1446,27 @@ import * as THREE from 'three';
     devolverAlCatalogo(fantasma, boton);
   }
 
-  async function pedirNube(ruta, opciones = {}) {
+  function urlNube(id) {
+    return NUBE_BASE + '/' + NUBE_RUTA + (id ? '/' + encodeURIComponent(id) : '') + '.json';
+  }
+
+  async function pedirNube(id, opciones = {}) {
     const control = new AbortController();
     const temporizador = setTimeout(() => control.abort(), 6500);
+    const esLectura = !opciones.method || opciones.method === 'GET';
+    const url = urlNube(id) + (esLectura ? '?_=' + Date.now() : '');
     try {
-      return await fetch(nubeUrl + ruta, Object.assign({}, opciones, { signal: control.signal }));
+      return await fetch(url, Object.assign({ cache: 'no-store' }, opciones, { signal: control.signal }));
     } finally {
       clearTimeout(temporizador);
     }
   }
 
   async function enviarAdorno(registro) {
-    if (!nubeUrl) {
-      estadoNube('Local · sin nube', 'local');
-      return false;
-    }
     estadoNube('Guardando en nube', 'guardando');
     try {
-      const respuesta = await pedirNube('/adornos', {
-        method: 'POST',
+      const respuesta = await pedirNube(registro.id, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(registro)
       });
@@ -1507,18 +1496,19 @@ import * as THREE from 'three';
   }
 
   async function sincronizarNube() {
-    if (!nubeUrl) {
-      estadoNube('Local · sin nube', 'local');
-      return false;
-    }
     if (sincronizandoNube || !activo) return false;
     sincronizandoNube = true;
     estadoNube('Sincronizando nube', 'guardando');
     try {
-      const respuesta = await pedirNube('/adornos', { headers: { Accept: 'application/json' } });
+      const respuesta = await pedirNube('', { headers: { Accept: 'application/json' } });
       if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
       const datos = await respuesta.json();
-      const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.adornos) ? datos.adornos : []);
+      let lista = [];
+      if (Array.isArray(datos)) {
+        lista = datos;
+      } else if (datos && typeof datos === 'object') {
+        lista = Object.keys(datos).map((id) => Object.assign({ id: id }, datos[id]));
+      }
       let cambios = false;
       lista.forEach((valor) => {
         const registro = normalizarRegistro(valor);
@@ -1536,17 +1526,6 @@ import * as THREE from 'three';
     } finally {
       sincronizandoNube = false;
     }
-  }
-
-  function configurarNube(url) {
-    const normalizada = normalizarUrlNube(url);
-    nubeUrl = normalizada;
-    if (normalizada) escribirAlmacen(CLAVE_NUBE, normalizada);
-    else escribirAlmacen(CLAVE_NUBE, null);
-    if (!normalizada) estadoNube('Local · sin nube', 'local');
-    else if (activo) void sincronizarNube();
-    else estadoNube('Nube configurada', 'local');
-    return nubeUrl;
   }
 
   function iniciarBucles() {
@@ -1581,9 +1560,8 @@ import * as THREE from 'three';
     }
     reiniciarCopos();
     iniciarBucles();
-    if (nubeUrl) estadoNube('Conectando nube', 'guardando');
-    else estadoNube('Local · sin nube', 'local');
-    if (nubeUrl) void sincronizarNube();
+    estadoNube('Conectando nube', 'guardando');
+    void sincronizarNube();
   }
 
   function detener() {
@@ -1625,7 +1603,7 @@ import * as THREE from 'three';
     }
     if (activo) {
       iniciarBucles();
-      if (nubeUrl) void sincronizarNube();
+      void sincronizarNube();
     }
   });
 
@@ -1643,8 +1621,7 @@ import * as THREE from 'three';
     activo: () => activo,
     registros: () => adornosColocados.map(registroDeAdorno),
     sincronizar: () => sincronizarNube(),
-    configurarNube: configurarNube,
     estrellaPermitida: () => esDiaEstrella(),
-    nube: () => ({ url: nubeUrl, pendientes: leerPendientes().length })
+    nube: () => ({ url: NUBE_BASE, ruta: NUBE_RUTA, pendientes: leerPendientes().length })
   };
 })();

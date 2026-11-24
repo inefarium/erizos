@@ -4,9 +4,9 @@
 | --- | --- |
 | Proyecto | INEFARIUM / erizos |
 | Tipo de documento | Especificación funcional (SDD - Specification-Driven Development) |
-| Versión | 1.1 |
-| Fecha | 2026-11-23 |
-| Estado | Tema Navidad con persistencia Cloudflare implementado |
+| Versión | 1.2 |
+| Fecha | 2026-11-24 |
+| Estado | Tema Navidad con persistencia Firebase implementado |
 | Repositorio | https://github.com/inefarium/erizos |
 | Alcance del documento | Comportamiento funcional, datos, configuración y criterios de aceptación del sitio actual |
 
@@ -55,12 +55,12 @@ Principios de diseño:
 - Calendario de películas de Halloween con sincronización opcional en Firebase Realtime Database.
 - Música de fondo local para el tema de Halloween.
 - Persistencia local en `localStorage` y, opcionalmente, en la nube.
-- Nube Cloudflare Worker + D1 para los adornos de Navidad de Chamoys.
+- Firebase Realtime Database compartida para el calendario y los adornos de Navidad de Chamoys.
 
 ### 3.2 Excluido
 
 - Autenticación de usuarios.
-- Backend con autenticación o panel de administración; solo existe el Worker público de adornos.
+- Backend propio, autenticación o panel de administración; solo se usan las rutas públicas de Firebase.
 - Pruebas automatizadas versionadas en el repositorio.
 - Internacionalización (todo el contenido está en español).
 - Accesibilidad avanzada certificada.
@@ -87,7 +87,7 @@ Principios de diseño:
 | Corazón 3D | Malla wireframe de corazón renderizada con Three.js en `index.html` |
 | Escena | Contenedor del corazón y sus estrellas |
 | Fantasma | Elemento flotante que sigue al puntero/dedo durante un arrastre en el calendario |
-| Nube | Firebase Realtime Database usada para sincronizar películas |
+| Nube | Firebase Realtime Database usada para sincronizar películas y adornos |
 | Modo local | Funcionamiento sin Firebase, usando solo `localStorage` |
 | Holograma | Estilo visual con glow, líneas de escaneo, parpadeo y transparencias |
 
@@ -102,8 +102,7 @@ Principios de diseño:
 - Scripts legacy de temas cargados como módulos de efecto secundario, en orden.
 - Canvas 2D para el resto de modelos 3D (regalo, flor, calabaza, partículas).
 - Web Audio API para sonidos sintetizados y reverb.
-- Firebase Realtime Database vía REST (`fetch`) para el calendario.
-- Cloudflare Worker + D1 vía REST (`fetch`) para los adornos de Navidad.
+- Firebase Realtime Database vía REST (`fetch`) para el calendario y los adornos de Navidad.
 - `localStorage` para caché, preferencias y cola de sincronización.
 
 ### 6.2 Estructura de archivos
@@ -124,7 +123,6 @@ erizos/
     themes/florcita_amarilla.js Tema plugin: flor 3D
     themes/calabaza.js        Tema plugin: calabaza + calendario + música + nube
     themes/navidad-chamoys.js Tema plugin: árbol holográfico + adornos + nieve + nube
-  worker/                     Worker Cloudflare + D1 de adornos de Navidad
   public/                     Copiado tal cual a dist/
     libro.html                Libro de fotos holográfico
     mi_prenovia.html          Página independiente de tarjeta holograma
@@ -446,7 +444,7 @@ window.CalabazaHalloween = {
 | RF-13.9 | La estrella solo puede colocarse el 25 de diciembre; antes se muestra un aviso y no se coloca | Alta |
 | RF-13.10 | Solo puede existir una estrella en el árbol; al intentar otra se informa que ya está colocada | Media |
 | RF-13.11 | Guardar cada adorno en `localStorage` con id, tipo, color, posición, rotación, escala y fecha | Alta |
-| RF-13.12 | Sincronizar los adornos con Cloudflare D1 al activar, al recuperar visibilidad y tras colocarlos | Alta |
+| RF-13.12 | Sincronizar los adornos con Firebase Realtime Database al activar, al recuperar visibilidad y tras colocarlos | Alta |
 | RF-13.13 | Si la nube falla, mantener el guardado local y reintentar los pendientes en la siguiente sincronización | Alta |
 | RF-13.14 | Restaurar los adornos guardados al recargar o en otro dispositivo conectado a la misma nube | Alta |
 | RF-13.15 | Limitar el árbol a 48 adornos y avisar cuando esté lleno | Baja |
@@ -455,13 +453,15 @@ window.CalabazaHalloween = {
 
 **Nube:**
 
-- Worker: `worker/src/index.js`; tabla D1 `adornos`.
-- Endpoints: `GET /salud`, `GET /adornos`, `POST /adornos`; CORS abierto.
-- La URL se toma de `VITE_NAVIDAD_NUBE_URL`, de `localStorage.navidad_nube_url` o de `configurarNube(url)`.
-- Sin URL o sin conexión: modo local; los adornos se mantienen y se encolan para subirlos después.
+- Firebase Realtime Database: `https://calabazainefarium-default-rtdb.firebaseio.com`.
+- Ruta separada de las películas: `calabaza/navidad/adornos`.
+- Lectura: `GET .../calabaza/navidad/adornos.json`.
+- Escritura: `PUT .../calabaza/navidad/adornos/<id>.json`.
+- No requiere credenciales ni variables de entorno; usa la misma base pública que el calendario.
+- Sin conexión: modo local; los adornos se mantienen y se encolan para subirlos después.
 - Si dos estrellas llegan de fuentes distintas, solo se restaura la primera.
 
-**API pública:** `window.NavidadChamoys = { activar(), desactivar(), adornos(), activo(), registros(), sincronizar(), configurarNube(url), estrellaPermitida(), nube() }`.
+**API pública:** `window.NavidadChamoys = { activar(), desactivar(), adornos(), activo(), registros(), sincronizar(), estrellaPermitida(), nube() }`.
 
 ### 7.14 RF-14 - Libro de fotos (`libro.html`)
 
@@ -556,7 +556,6 @@ abierto --(Cerrar/Escape)--> cerrado
 | `calabaza_musica_v1` | Índice de la canción elegida | `calabaza.js` |
 | `navidad_chamoys_adornos_v1` | JSON con los adornos colocados | `navidad-chamoys.js` |
 | `navidad_chamoys_pendientes_v1` | IDs de adornos pendientes de subir | `navidad-chamoys.js` |
-| `navidad_nube_url` | URL manual del Worker de Navidad | `navidad-chamoys.js` |
 
 ### 9.2 Esquema de películas
 
@@ -591,34 +590,32 @@ calabaza/peliculas/<id> = { "titulo": "...", "fecha": "YYYY-MM-DD" | null }
 
 `peliculas.json` en la raíz. Solo se usa en modo local (sin Firebase) y solo si no hay datos guardados. Actualmente no existe en el repositorio.
 
-### 9.5 Cloudflare D1 (adornos de Navidad)
+### 9.5 Firebase Realtime Database (adornos de Navidad)
 
-Tabla `adornos`:
-
-```sql
-CREATE TABLE adornos (
-  id TEXT PRIMARY KEY,
-  tipo TEXT NOT NULL,
-  color TEXT NOT NULL,
-  pos_x REAL NOT NULL,
-  pos_y REAL NOT NULL,
-  pos_z REAL NOT NULL,
-  rot_y REAL NOT NULL,
-  rot_z REAL NOT NULL,
-  escala REAL NOT NULL,
-  creado TEXT NOT NULL
-);
+```text
+calabaza/navidad/adornos/<id> = {
+  "id": "...",
+  "tipo": "...",
+  "color": "#rrggbb",
+  "x": 0,
+  "y": 0,
+  "z": 0,
+  "rotY": 0,
+  "rotZ": 0,
+  "escala": 1,
+  "creado": "ISO 8601"
+}
 ```
 
 - `id`: UUID generado en el cliente; también acepta IDs alfanuméricos con `_` y `-`.
 - `tipo`: uno de los 10 adornos soportados.
-- `pos_x`, `pos_y`, `pos_z`: coordenadas locales dentro del grupo del árbol.
-- `rot_y`, `rot_z`: rotación local del adorno.
+- `x`, `y`, `z`: coordenadas locales dentro del grupo del árbol.
+- `rotY`, `rotZ`: rotación local del adorno.
 - `escala`: escala base restaurada.
 - `creado`: ISO 8601.
-- Lectura: `GET /adornos` devuelve `{ adornos: [...] }`.
-- Escritura: `POST /adornos` inserta o actualiza por `id` (`ON CONFLICT`).
-- No hay endpoint público de borrado; el vaciado se hace con Wrangler.
+- Lectura: `GET .../calabaza/navidad/adornos.json` devuelve un objeto indexado por `id`.
+- Escritura: `PUT .../calabaza/navidad/adornos/<id>.json` crea o reemplaza ese adorno.
+- No hay borrado desde la interfaz; el vaciado se hace manualmente desde Firebase.
 
 ---
 
@@ -684,8 +681,8 @@ La lista `paginas` de `libro.html` define el contenido. Tipos soportados: `inici
 | `VELOCIDAD_GIRO` | 0.12 rad/s | Giro del árbol |
 | `MAX_ADORNOS` | 48 | Cupo total del árbol |
 | `DURACION_NACIMIENTO` | 420 ms | Aparición de cada adorno |
-| `VITE_NAVIDAD_NUBE_URL` | vacío por defecto | URL del Worker D1 |
-| `navidad_nube_url` | vacío por defecto | Override manual en `localStorage` |
+| `NUBE_BASE` | `https://calabazainefarium-default-rtdb.firebaseio.com` | Base Firebase compartida |
+| `NUBE_RUTA` | `calabaza/navidad/adornos` | Ruta de los adornos |
 | Fecha de estrella | 25 de diciembre | Se evalúa con la fecha local del navegador |
 
 ---
@@ -708,8 +705,7 @@ La lista `paginas` de `libro.html` define el contenido. Tipos soportados: `inici
 **Dependencias externas:**
 
 - Three.js y React se empaquetan en el build (sin CDN).
-- Firebase (internet) para la sincronización del calendario; opcional.
-- Cloudflare Worker + D1 (internet) para los adornos de Navidad; opcional.
+- Firebase (internet) para la sincronización del calendario y los adornos de Navidad; opcional.
 - YouTube y `n9.cl` al pulsar enlaces externos.
 
 **Servido del sitio:** el proyecto se compila con `npm run build` y se publica `dist/` en GitHub Pages mediante el workflow. En desarrollo se usa `npm run dev`. Abrir el `index.html` de la raíz con `file://` ya no funciona, porque es la entrada de Vite.
@@ -801,8 +797,8 @@ Formato: dado un contexto, cuando ocurre una acción, entonces se obtiene un res
 - CA-33: Dado un día distinto al 25 de diciembre, cuando se intenta colocar la estrella, entonces no se coloca y aparece el aviso correspondiente.
 - CA-34: Dado el 25 de diciembre, cuando se coloca la estrella, entonces queda en la copa y solo puede existir una.
 - CA-35: Dado un adorno guardado, cuando se recarga la página y se activa el tema, entonces reaparece en la misma posición.
-- CA-36: Dado el Worker configurado, cuando se coloca un adorno, entonces se envía a D1 y aparece en otro navegador tras sincronizar.
-- CA-37: Dado el Worker caído o sin URL, entonces el tema sigue funcionando en local y conserva pendientes.
+- CA-36: Dado Firebase disponible, cuando se coloca un adorno, entonces se guarda en `calabaza/navidad/adornos` y aparece en otro navegador tras sincronizar.
+- CA-37: Dado Firebase caído o sin conexión, entonces el tema sigue funcionando en local y conserva pendientes.
 - CA-38: Dado que se desactiva el tema o se oculta la pestaña, entonces se pausan las animaciones y se limpian arrastres y avisos.
 
 ---
@@ -847,8 +843,7 @@ Peso total del proyecto: aproximadamente 43 MB (40.9 MB de audio y 2 MB de fotos
 | DT-12 | La animación del corazón sigue corriendo cuando está oculto | Rendimiento | `src/components/Corazon3D.tsx` |
 | DT-13 | Cada click crea nodos de audio que no se desconectan | Memoria a largo plazo | `src/lib/audio.ts` |
 | DT-14 | Erratas de contenido ("tube", "qerias") | Contenido | `public/libro.html` |
-| DT-15 | Worker de Navidad público sin autenticación; cualquiera con la URL puede leer y escribir adornos | Seguridad | `worker/src/index.js` |
-| DT-16 | `database_id` de D1 debe completarse y desplegarse manualmente antes de activar la nube | Configuración | `worker/wrangler.toml` |
+| DT-15 | Ruta de adornos pública sin autenticación; cualquiera con la URL puede leer y escribir bajo `calabaza/navidad` | Seguridad | Firebase RTDB |
 
 ---
 
@@ -882,7 +877,7 @@ Una modificación se considera terminada cuando:
 - No se introducen errores de sintaxis en los `.js`.
 - Los temas se pueden activar y desactivar sin dejar temporizadores, animaciones ni audio activos.
 - La experiencia funciona con mouse y con toque.
-- Los adornos de Navidad sobreviven a la recarga y, con URL configurada, se sincronizan con D1.
+- Los adornos de Navidad sobreviven a la recarga y, con Firebase disponible, se sincronizan con la nube.
 - La cola local de Navidad no pierde pendientes cuando la nube falla.
 - Los assets referenciados existen y las rutas son correctas.
 - La consola del navegador no muestra errores nuevos.
@@ -894,4 +889,5 @@ Una modificación se considera terminada cuando:
 | Versión | Fecha | Descripción |
 | --- | --- | --- |
 | 1.0 | 2026-11-14 | Línea base funcional del proyecto a partir del código actual |
-| 1.1 | 2026-11-23 | Navidad de Chamoys: árbol sólido y frontal, 10 adornos, estrella bloqueada al 25 de diciembre, rendimiento y persistencia Cloudflare D1 |
+| 1.1 | 2026-11-23 | Navidad de Chamoys: árbol sólido y frontal, 10 adornos, estrella bloqueada al 25 de diciembre y rendimiento |
+| 1.2 | 2026-11-24 | Navidad de Chamoys: persistencia migrada a la Firebase compartida, en la ruta `calabaza/navidad/adornos`, sin credenciales ni backend propio |

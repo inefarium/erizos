@@ -19,8 +19,6 @@ Thumbs.db
 # Vite
 .vite/
 
-# Cloudflare
-.wrangler/
-.dev.vars
+# Entorno local
 .env
 .env.*
