@@ -1602,7 +1602,7 @@ import * as THREE from 'three';
       const cable = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(puntos),
         new THREE.LineBasicMaterial({
-          color: 0xd9a05a, transparent: true, opacity: 0.28,
+          color: 0xd9a05a, transparent: true, opacity: 0.38,
           blending: THREE.AdditiveBlending, depthWrite: false
         })
       );
@@ -1631,10 +1631,10 @@ import * as THREE from 'three';
       const material = new THREE.PointsMaterial({
         color: colores[indice],
         map: texturaPunto,
-        size: indice % 2 === 0 ? 0.11 : 0.092,
+        size: indice % 2 === 0 ? 0.14 : 0.12,
         sizeAttenuation: true,
         transparent: true,
-        opacity: 0.92,
+        opacity: 1,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
         alphaTest: 0.02
@@ -1646,8 +1646,8 @@ import * as THREE from 'three';
         material: material,
         fase: azar(0, TAU),
         velocidad: azar(0.0008, 0.0017),
-        base: azar(0.72, 0.9),
-        amplitud: azar(0.14, 0.24)
+        base: azar(0.8, 0.94),
+        amplitud: azar(0.12, 0.22)
       });
     });
 
@@ -1679,8 +1679,8 @@ import * as THREE from 'three';
     geometria.setAttribute('position', new THREE.Float32BufferAttribute(posiciones, 3));
     geometria.setAttribute('color', new THREE.Float32BufferAttribute(colores, 3));
     const aura = new THREE.Points(geometria, new THREE.PointsMaterial({
-      map: texturaPunto, size: 0.19, sizeAttenuation: true, vertexColors: true,
-      transparent: true, opacity: 0.28, blending: THREE.AdditiveBlending,
+      map: texturaPunto, size: 0.24, sizeAttenuation: true, vertexColors: true,
+      transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending,
       depthWrite: false, alphaTest: 0.02
     }));
     aura.name = 'aura-arbol';
@@ -2647,8 +2647,9 @@ import * as THREE from 'three';
       grupoAuraArbol.material.opacity = 0.13 + Math.sin(ahora * 0.0009 + 0.8) * 0.045;
       grupoAuraArbol.rotation.y -= dt * 0.012;
     }
-    if (luzGuirnalda) luzGuirnalda.intensity = 4.2 + Math.sin(ahora * 0.0021 + 1.3) * 1.0;
-    if (lucesCalidas) lucesCalidas.material.opacity = 0.9 + Math.sin(ahora * 0.0016) * 0.1;
+    if (luzGuirnalda) luzGuirnalda.intensity = 6 + Math.sin(ahora * 0.0021 + 1.3) * 1.2;
+    if (lucesCalidas) lucesCalidas.material.opacity = limitar(0.95 + Math.sin(ahora * 0.0016) * 0.06, 0.6, 1);
+    lucesCalidas.material.size = 0.11;
     if (materialConcha) materialConcha.uniforms.uTiempo.value = ahora * 0.001;
     actualizarAdornos(ahora);
     renderer.render(escena, camara);
