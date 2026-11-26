@@ -439,7 +439,7 @@ window.CalabazaHalloween = {
 | RF-13.4 | Mostrar un árbol 3D girando lentamente, con cuerpo translúcido y líneas frontales/traseras diferenciadas | Alta |
 | RF-13.5 | Mostrar un catálogo con 10 adornos: bola, estrella, campana, copo, regalo, lazo, caramelo, galleta, piña y vela | Alta |
 | RF-13.6 | Arrastrar adornos con mouse o táctil y resaltar la zona del árbol | Alta |
-| RF-13.7 | Al soltar sobre el árbol, el adorno queda pegado, gira con él y se coloca en la cara visible | Alta |
+| RF-13.7 | Al soltar sobre el árbol, proyectar el cursor contra la malla 3D y dejar el adorno exactamente en ese punto, girando con el árbol | Alta |
 | RF-13.8 | Al soltar fuera del árbol, el adorno vuelve animado a su botón del catálogo | Alta |
 | RF-13.9 | La estrella solo puede colocarse el 25 de diciembre; antes se muestra un aviso y no se coloca | Alta |
 | RF-13.10 | Solo puede existir una estrella en el árbol; al intentar otra se informa que ya está colocada | Media |
@@ -554,8 +554,10 @@ abierto --(Cerrar/Escape)--> cerrado
 | --- | --- | --- |
 | `calabaza_calendario_v1` | JSON `{ version, peliculas[] }` | `calabaza.js` |
 | `calabaza_musica_v1` | Índice de la canción elegida | `calabaza.js` |
-| `navidad_chamoys_adornos_v1` | JSON con los adornos colocados | `navidad-chamoys.js` |
-| `navidad_chamoys_pendientes_v1` | IDs de adornos pendientes de subir | `navidad-chamoys.js` |
+| `navidad_chamoys_adornos_v2` | JSON con los adornos colocados | `navidad-chamoys.js` |
+| `navidad_chamoys_pendientes_v2` | IDs de adornos pendientes de subir | `navidad-chamoys.js` |
+| `navidad_chamoys_musicas_v1` | Metadatos de pistas subidas y, en registros antiguos, su data URL | `navidad-chamoys.js` |
+| `navidad_chamoys_musica_sel_v1` | Índice de la pista de Navidad elegida | `navidad-chamoys.js` |
 
 ### 9.2 Esquema de películas
 
@@ -616,6 +618,28 @@ calabaza/navidad/adornos/<id> = {
 - Lectura: `GET .../calabaza/navidad/adornos.json` devuelve un objeto indexado por `id`.
 - Escritura: `PUT .../calabaza/navidad/adornos/<id>.json` crea o reemplaza ese adorno.
 - No hay borrado desde la interfaz; el vaciado se hace manualmente desde Firebase.
+
+### 9.6 Firebase Realtime Database (música de Navidad)
+
+```text
+calabaza/navidad/musicas/<id> = {
+  "id": "...",
+  "nombre": "...",
+  "creado": "ISO 8601",
+  "tamano": 0,
+  "mime": "audio/mpeg",
+  "partes": 1,
+  "formato": "chunks"
+}
+
+calabaza/navidad/musicas_datos/<id>/<indice> = "base64..."
+```
+
+- El audio se divide en partes de 600000 bytes antes de convertirlo a base64.
+- Primero se suben todas las partes y al final el metadato con `partes`; si falta el metadato la pista se ignora.
+- No hay límite de tamaño en el cliente. El límite real depende de las reglas y la cuota de Firebase RTDB.
+- Al reproducir una pista en la nube, se descargan sus partes y se reconstruye un `Blob` para el reproductor.
+- Los registros antiguos con `data` (data URL) siguen siendo compatibles.
 
 ---
 
@@ -683,6 +707,9 @@ La lista `paginas` de `libro.html` define el contenido. Tipos soportados: `inici
 | `DURACION_NACIMIENTO` | 420 ms | Aparición de cada adorno |
 | `NUBE_BASE` | `https://calabazainefarium-default-rtdb.firebaseio.com` | Base Firebase compartida |
 | `NUBE_RUTA` | `calabaza/navidad/adornos` | Ruta de los adornos |
+| `NUBE_RUTA_MUSICAS` | `calabaza/navidad/musicas` | Metadatos de las pistas subidas |
+| `NUBE_RUTA_MUSICA_DATOS` | `calabaza/navidad/musicas_datos` | Partes base64 de cada pista |
+| `MUSICA_CHUNK_BYTES` | 600000 | Tamaño de cada parte de audio antes de base64 |
 | Fecha de estrella | 25 de diciembre | Se evalúa con la fecha local del navegador |
 
 ---
@@ -891,3 +918,4 @@ Una modificación se considera terminada cuando:
 | 1.0 | 2026-11-14 | Línea base funcional del proyecto a partir del código actual |
 | 1.1 | 2026-11-23 | Navidad de Chamoys: árbol sólido y frontal, 10 adornos, estrella bloqueada al 25 de diciembre y rendimiento |
 | 1.2 | 2026-11-24 | Navidad de Chamoys: persistencia migrada a la Firebase compartida, en la ruta `calabaza/navidad/adornos`, sin credenciales ni backend propio |
+| 1.3 | 2026-11-25 | Navidad de Chamoys: colocación de adornos por proyección 3D, árbol más grande, limpieza de adornos locales/nube y música sin límite de 4 MB mediante partes en Firebase |

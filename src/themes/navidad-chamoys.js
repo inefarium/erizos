@@ -17,19 +17,21 @@ import * as THREE from 'three';
   const BASE_Y = -1.18;
   const DURACION_NACIMIENTO = 420;
   const MAX_ADORNOS = 48;
-  const CLAVE_LOCAL = 'navidad_chamoys_adornos_v1';
-  const CLAVE_PENDIENTES = 'navidad_chamoys_pendientes_v1';
+  const CLAVE_LOCAL = 'navidad_chamoys_adornos_v2';
+  const CLAVE_PENDIENTES = 'navidad_chamoys_pendientes_v2';
+  const CLAVES_ADORNOS_LEGACY = ['navidad_chamoys_adornos_v1', 'navidad_chamoys_pendientes_v1'];
   const CLAVE_MUSICAS = 'navidad_chamoys_musicas_v1';
   const CLAVE_MUSICA_SEL = 'navidad_chamoys_musica_sel_v1';
   const NUBE_BASE = 'https://calabazainefarium-default-rtdb.firebaseio.com';
   const NUBE_RUTA = 'calabaza/navidad/adornos';
   const NUBE_RUTA_MUSICAS = 'calabaza/navidad/musicas';
+  const NUBE_RUTA_MUSICA_DATOS = 'calabaza/navidad/musicas_datos';
   const LADO_COPO = 64;
   const RADIO_COPO = 24;
   const NIVELES_ARBOL = 6;
   const LOBULOS_ARBOL = 12;
   const MUSICA_VOL = 0.32;
-  const MUSICA_MAX_BYTES = 4 * 1024 * 1024;
+  const MUSICA_CHUNK_BYTES = 600000;
 
   const PALETA = {
     cian: 0x00f0ff,
@@ -152,7 +154,7 @@ import * as THREE from 'three';
 
     .navidad-escena {
       position: absolute; right: clamp(0vw, 3vw, 5vw); top: 51%;
-      width: min(42vw, 60vh); height: min(70vh, 88vw);
+      width: min(48vw, 68vh); height: min(78vh, 100vw);
       transform: translateY(-50%);
     }
     .navidad-escena::before {
@@ -389,7 +391,7 @@ import * as THREE from 'three';
     @media (max-width: 760px) {
       .navidad-escena {
         right: 50%; top: 42%; transform: translate(50%,-50%);
-        width: min(92vw, 62vh); height: min(70vh, 112vw);
+        width: min(98vw, 68vh); height: min(78vh, 122vw);
       }
       .navidad-halo { right: 50%; top: 40%; transform: translate(50%,-50%); width: 104vw; }
       .navidad-suelo { width: 100vw; }
@@ -479,7 +481,7 @@ import * as THREE from 'three';
       </div>
       <button class="navidad-musica-subir" type="button">+ Cargar musica</button>
       <input class="navidad-musica-archivo" type="file" accept="audio/*" hidden>
-      <p class="navidad-musica-estado" data-estado="local">Las pistas se guardan en Firebase.</p>
+      <p class="navidad-musica-estado" data-estado="local">Sin limite de tamano. Las pistas se guardan en Firebase.</p>
     </aside>
     <div class="navidad-aviso" role="status" aria-live="polite"></div>
   `;
@@ -529,6 +531,9 @@ import * as THREE from 'three';
   let grupoPolvo = null;
   let lucesCalidas = null;
   let materialConcha = null;
+  let mallaConcha = null;
+  const raycasterArbol = new THREE.Raycaster();
+  const punteroNdc = new THREE.Vector2();
   let rafArbol = null;
   let rafNieve = null;
   let ultimoTiempoArbol = null;
@@ -550,6 +555,7 @@ import * as THREE from 'three';
   let musicaIndice = -1;
   let cargandoMusicas = false;
   let musicasNubeCargadas = false;
+  let tokenMusica = 0;
   const audioMusica = new Audio();
   audioMusica.preload = 'metadata';
   audioMusica.volume = MUSICA_VOL;
@@ -632,13 +638,18 @@ import * as THREE from 'three';
   }
 
   function guardarMusicasLocal() {
-    const subidas = musicas.filter((pista) => !pista.defecto).map((pista) => ({
-      id: pista.id,
-      nombre: pista.nombre,
-      data: pista.data,
-      creado: pista.creado,
-      tamano: pista.tamano
-    }));
+    const subidas = musicas.filter((pista) => !pista.defecto).map((pista) => {
+      const registro = {
+        id: pista.id,
+        nombre: pista.nombre,
+        creado: pista.creado,
+        tamano: pista.tamano,
+        mime: pista.mime || '',
+        partes: Number(pista.partes) || 0
+      };
+      if (pista.data) registro.data = pista.data;
+      return registro;
+    });
     if (!subidas.length) escribirAlmacen(CLAVE_MUSICAS, null);
     else escribirAlmacen(CLAVE_MUSICAS, JSON.stringify(subidas));
   }
@@ -652,14 +663,19 @@ import * as THREE from 'three';
     }
     if (!Array.isArray(datos)) return;
     datos.forEach((valor) => {
-      if (!valor || typeof valor.data !== 'string') return;
-      if (!valor.data.startsWith('data:audio') && !/^https?:/i.test(valor.data)) return;
+      if (!valor || typeof valor !== 'object') return;
+      const data = typeof valor.data === 'string' ? valor.data : '';
+      const dataValida = data.startsWith('data:audio') || /^https?:/i.test(data);
+      const partes = Math.max(0, Math.floor(Number(valor.partes) || 0));
+      if (!dataValida && !partes) return;
       const id = typeof valor.id === 'string' && valor.id ? valor.id : nuevoId();
       if (musicas.some((pista) => pista.id === id)) return;
       musicas.push({
         id: id,
         nombre: String(valor.nombre || 'Musica').slice(0, 80),
-        data: valor.data,
+        data: dataValida ? data : undefined,
+        partes: partes,
+        mime: typeof valor.mime === 'string' ? valor.mime : '',
         creado: typeof valor.creado === 'string' ? valor.creado : new Date().toISOString(),
         tamano: Number(valor.tamano) || 0,
         subida: true
@@ -698,11 +714,11 @@ import * as THREE from 'three';
           actualizarBotonMusica();
           return;
         }
-        if (indice === musicaIndice) {
+        if (indice === musicaIndice && audioMusica.src) {
           void reproducirAudio();
           return;
         }
-        reproducirMusica(indice);
+        void reproducirMusica(indice);
       });
       listaMusicaEl.appendChild(boton);
     });
@@ -712,6 +728,10 @@ import * as THREE from 'three';
   async function reproducirAudio() {
     if (!musicas.length) return;
     if (musicaIndice < 0 || musicaIndice >= musicas.length) musicaIndice = 0;
+    if (!audioMusica.src) {
+      void reproducirMusica(musicaIndice);
+      return;
+    }
     audioMusica.volume = Number(volumenEl.value) || MUSICA_VOL;
     try {
       await audioMusica.play();
@@ -722,42 +742,136 @@ import * as THREE from 'three';
     actualizarBotonMusica();
   }
 
-  function reproducirMusica(indice) {
+  async function reproducirMusica(indice) {
     if (!musicas.length) return;
     const n = musicas.length;
     musicaIndice = ((indice % n) + n) % n;
-    audioMusica.src = musicas[musicaIndice].data || musicas[musicaIndice].url;
-    try { audioMusica.currentTime = 0; } catch (error) { /* ignorar */ }
+    const pista = musicas[musicaIndice];
+    const token = ++tokenMusica;
     escribirAlmacen(CLAVE_MUSICA_SEL, String(musicaIndice));
     renderizarMusicas();
+    audioMusica.pause();
+    audioMusica.removeAttribute('src');
+    audioMusica.load();
+    estadoMusica('Preparando ' + pista.nombre + '...', 'guardando');
+    const fuente = await obtenerFuentePista(pista);
+    if (token !== tokenMusica) return;
+    if (!fuente) {
+      estadoMusica('No se pudo cargar la pista.', 'error');
+      return;
+    }
+    audioMusica.src = fuente;
+    try { audioMusica.currentTime = 0; } catch (error) { /* ignorar */ }
     void reproducirAudio();
   }
 
   function pistaSiguiente(delta) {
     if (!musicas.length) return;
-    if (musicaIndice < 0) reproducirMusica(0);
-    else reproducirMusica(musicaIndice + delta);
+    if (musicaIndice < 0) void reproducirMusica(0);
+    else void reproducirMusica(musicaIndice + delta);
   }
 
-  async function enviarMusica(pista) {
-    estadoMusica('Guardando musica en Firebase...', 'guardando');
+  async function obtenerFuentePista(pista) {
+    if (!pista) return null;
+    if (pista.url) return pista.url;
+    if (typeof pista.data === 'string' && pista.data) {
+      pista.url = pista.data;
+      return pista.url;
+    }
+    if (!pista.partes) return null;
+    if (!pista.cargando) {
+      pista.cargando = descargarPista(pista).finally(() => {
+        pista.cargando = null;
+      });
+    }
+    return pista.cargando;
+  }
+
+  async function descargarPista(pista) {
+    estadoMusica('Descargando ' + pista.nombre + '...', 'guardando');
     try {
+      const trozos = new Array(pista.partes);
+      for (let i = 0; i < pista.partes; i++) {
+        const respuesta = await pedirNubeMusicaDatos(pista.id, i);
+        if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
+        const trozo = await respuesta.json();
+        if (typeof trozo !== 'string') throw new Error('Parte invalida');
+        trozos[i] = trozo;
+        estadoMusica('Descargando ' + pista.nombre + ' ' + Math.round(((i + 1) / pista.partes) * 100) + '%', 'guardando');
+      }
+      pista.url = URL.createObjectURL(base64ABlob(trozos.join(''), pista.mime || 'audio/mpeg'));
+      return pista.url;
+    } catch (error) {
+      estadoMusica('No se pudo descargar la pista desde Firebase.', 'error');
+      return null;
+    }
+  }
+
+  function registrarPistaNube(valor) {
+    if (!valor || typeof valor !== 'object') return false;
+    const data = typeof valor.data === 'string' ? valor.data : '';
+    const dataValida = data.startsWith('data:audio') || /^https?:/i.test(data);
+    const partes = Math.max(0, Math.floor(Number(valor.partes) || 0));
+    if (!dataValida && !partes) return false;
+    const id = String(valor.id || '').trim() || nuevoId();
+    const existente = musicas.find((pista) => pista.id === id);
+    if (existente) {
+      if (!existente.data && !existente.partes && partes) existente.partes = partes;
+      if (!existente.mime && typeof valor.mime === 'string') existente.mime = valor.mime;
+      return false;
+    }
+    musicas.push({
+      id: id,
+      nombre: String(valor.nombre || 'Musica').slice(0, 80),
+      data: dataValida ? data : undefined,
+      partes: partes,
+      mime: typeof valor.mime === 'string' ? valor.mime : '',
+      creado: typeof valor.creado === 'string' ? valor.creado : new Date().toISOString(),
+      tamano: Number(valor.tamano) || 0,
+      subida: true
+    });
+    return true;
+  }
+
+  async function enviarMusica(pista, archivo) {
+    const total = Math.max(1, Math.ceil(archivo.size / MUSICA_CHUNK_BYTES));
+    pista.partes = total;
+    estadoMusica('Subiendo ' + pista.nombre + ' 0%...', 'guardando');
+    try {
+      for (let i = 0; i < total; i++) {
+        const inicio = i * MUSICA_CHUNK_BYTES;
+        const trozo = archivo.slice(inicio, Math.min(inicio + MUSICA_CHUNK_BYTES, archivo.size));
+        const bytes = new Uint8Array(await trozo.arrayBuffer());
+        const respuesta = await pedirNubeMusicaDatos(pista.id, i, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bytesABase64(bytes))
+        });
+        if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
+        const porcentaje = Math.round(((i + 1) / total) * 92);
+        estadoMusica('Subiendo ' + pista.nombre + ' ' + porcentaje + '%...', 'guardando');
+      }
       const respuesta = await pedirNubeMusicas(pista.id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: pista.id,
           nombre: pista.nombre,
-          data: pista.data,
           creado: pista.creado,
-          tamano: pista.tamano
+          tamano: pista.tamano,
+          mime: pista.mime,
+          partes: total,
+          formato: 'chunks'
         })
       });
       if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
-      estadoMusica('Musica guardada en Firebase.', 'ok');
+      pista.enNube = true;
+      guardarMusicasLocal();
+      estadoMusica('Musica guardada en Firebase (' + total + ' parte' + (total === 1 ? '' : 's') + ').', 'ok');
       return true;
     } catch (error) {
-      estadoMusica('No se pudo subir. Quedo guardada en este dispositivo.', 'error');
+      pista.partes = 0;
+      estadoMusica('No se pudo subir la musica a Firebase.', 'error');
       return false;
     }
   }
@@ -779,19 +893,7 @@ import * as THREE from 'three';
       else if (datos && typeof datos === 'object') lista = Object.keys(datos).map((id) => Object.assign({ id: id }, datos[id]));
       let agregadas = 0;
       lista.forEach((valor) => {
-        if (!valor || typeof valor.data !== 'string') return;
-        if (!valor.data.startsWith('data:audio') && !/^https?:/i.test(valor.data)) return;
-        const id = String(valor.id || '').trim() || nuevoId();
-        if (musicas.some((pista) => pista.id === id)) return;
-        musicas.push({
-          id: id,
-          nombre: String(valor.nombre || 'Musica').slice(0, 80),
-          data: valor.data,
-          creado: typeof valor.creado === 'string' ? valor.creado : new Date().toISOString(),
-          tamano: Number(valor.tamano) || 0,
-          subida: true
-        });
-        agregadas++;
+        if (registrarPistaNube(valor)) agregadas++;
       });
       musicasNubeCargadas = true;
       if (agregadas) {
@@ -808,39 +910,61 @@ import * as THREE from 'three';
     }
   }
 
+  function bytesABase64(bytes) {
+    let binario = '';
+    const bloque = 0x8000;
+    for (let i = 0; i < bytes.length; i += bloque) {
+      binario += String.fromCharCode.apply(null, bytes.subarray(i, i + bloque));
+    }
+    return btoa(binario);
+  }
+
+  function base64ABlob(base64, mime) {
+    const binario = atob(base64);
+    const bytes = new Uint8Array(binario.length);
+    for (let i = 0; i < binario.length; i++) bytes[i] = binario.charCodeAt(i);
+    return new Blob([bytes], { type: mime || 'audio/mpeg' });
+  }
+
+  function mimeAudio(nombre, tipo) {
+    if (tipo && tipo.startsWith('audio/')) return tipo;
+    const extension = String(nombre || '').split('.').pop().toLowerCase();
+    return {
+      mp3: 'audio/mpeg',
+      ogg: 'audio/ogg',
+      wav: 'audio/wav',
+      m4a: 'audio/mp4',
+      aac: 'audio/aac',
+      flac: 'audio/flac'
+    }[extension] || 'audio/mpeg';
+  }
+
   function cargarArchivoMusica(archivo) {
     if (!archivo) return;
-    if (!archivo.type.startsWith('audio/')) {
+    const nombreArchivo = archivo.name || 'musica';
+    const extensionAudio = /\.(mp3|ogg|wav|m4a|aac|flac)$/i.test(nombreArchivo);
+    if (!archivo.type.startsWith('audio/') && !extensionAudio) {
       estadoMusica('El archivo debe ser de audio.', 'error');
       return;
     }
-    if (archivo.size > MUSICA_MAX_BYTES) {
-      estadoMusica('Maximo ' + Math.round(MUSICA_MAX_BYTES / (1024 * 1024)) + ' MB por cancion.', 'error');
+    if (!archivo.size) {
+      estadoMusica('El archivo de audio esta vacio.', 'error');
       return;
     }
-    estadoMusica('Leyendo ' + archivo.name + '...', 'guardando');
-    const lector = new FileReader();
-    lector.onerror = () => estadoMusica('No se pudo leer el archivo.', 'error');
-    lector.onload = () => {
-      const data = String(lector.result || '');
-      if (!data.startsWith('data:audio')) {
-        estadoMusica('Formato de audio no reconocido.', 'error');
-        return;
-      }
-      const pista = {
-        id: nuevoId(),
-        nombre: archivo.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 80) || 'Musica',
-        data: data,
-        creado: new Date().toISOString(),
-        tamano: archivo.size,
-        subida: true
-      };
-      musicas.push(pista);
-      guardarMusicasLocal();
-      renderizarMusicas();
-      void enviarMusica(pista);
+    const pista = {
+      id: nuevoId(),
+      nombre: nombreArchivo.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 80) || 'Musica',
+      url: URL.createObjectURL(archivo),
+      creado: new Date().toISOString(),
+      tamano: archivo.size,
+      mime: mimeAudio(nombreArchivo, archivo.type),
+      partes: 0,
+      subida: true
     };
-    lector.readAsDataURL(archivo);
+    musicas.push(pista);
+    renderizarMusicas();
+    estadoMusica('Leyendo ' + nombreArchivo + '...', 'guardando');
+    void enviarMusica(pista, archivo);
   }
 
   botonSubirMusicaEl.addEventListener('click', (e) => {
@@ -858,7 +982,8 @@ import * as THREE from 'three';
       const accion = boton.dataset.accion;
       if (accion === 'play') {
         if (!musicas.length) return;
-        if (musicaIndice < 0) reproducirMusica(0);
+        if (musicaIndice < 0) void reproducirMusica(0);
+        else if (!audioMusica.src) void reproducirMusica(musicaIndice);
         else if (audioMusica.paused) void reproducirAudio();
         else audioMusica.pause();
         actualizarBotonMusica();
@@ -911,6 +1036,28 @@ import * as THREE from 'three';
     const menu = window.OpcionesTemas.contenedorMenu;
     if (menu && puntoEnRect(x, y, menu.getBoundingClientRect())) return false;
     return true;
+  }
+
+  function puntoSobreMallaArbol(clientX, clientY) {
+    if (!mallaConcha || !camara || !grupoArbol) return null;
+    const rect = escenaEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    punteroNdc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    );
+    grupoArbol.updateMatrixWorld(true);
+    camara.updateMatrixWorld();
+    raycasterArbol.setFromCamera(punteroNdc, camara);
+    const golpes = raycasterArbol.intersectObject(mallaConcha, false);
+    if (!golpes.length) return null;
+    const local = grupoArbol.worldToLocal(golpes[0].point.clone());
+    const radial = new THREE.Vector3(local.x, 0, local.z);
+    if (radial.lengthSq() > 1e-6) {
+      radial.normalize();
+      local.addScaledVector(radial, 0.026);
+    }
+    return local;
   }
 
   function esDiaEstrella() {
@@ -1280,9 +1427,9 @@ import * as THREE from 'three';
       blending: THREE.NormalBlending
     });
 
-    const concha = new THREE.Mesh(crearConcha(), materialConcha);
-    concha.renderOrder = 2;
-    grupo.add(concha);
+    mallaConcha = new THREE.Mesh(crearConcha(), materialConcha);
+    mallaConcha.renderOrder = 2;
+    grupo.add(mallaConcha);
 
     const tronco = new THREE.Mesh(
       new THREE.CylinderGeometry(0.032, 0.055, 0.44, 12, 1, false),
@@ -1926,6 +2073,10 @@ import * as THREE from 'three';
     registros.forEach((valor) => agregarRegistro(normalizarRegistro(valor), false));
   }
 
+  function limpiarClavesAdornosAntiguas() {
+    CLAVES_ADORNOS_LEGACY.forEach((clave) => escribirAlmacen(clave, null));
+  }
+
   function colocarAdorno(tipo, colorHex, clientX, clientY) {
     if (!escenaLista || !grupoArbol) return false;
     if (tipo === 'estrella') {
@@ -1943,7 +2094,6 @@ import * as THREE from 'three';
       return false;
     }
 
-    const rect = escenaEl.getBoundingClientRect();
     let xDeseado;
     let y;
     let z;
@@ -1957,17 +2107,15 @@ import * as THREE from 'three';
       rotY = 0;
       escalaBase = 1.55;
     } else {
-      const nx = limitar((clientX - rect.left) / rect.width, 0, 1);
-      const ny = limitar((clientY - rect.top) / rect.height, 0, 1);
-      const t = limitar(1 - (ny - 0.08) / 0.84, 0.07, 0.94) + azar(-0.018, 0.018);
-      const haciaCamara = Math.cos(grupoArbol.rotation.y) >= 0 ? 1 : -1;
-      const fraccion = limitar((nx - 0.5) * 2.05, -1, 1) * 0.96;
-      const ang = Math.asin(limitar(fraccion, -0.99, 0.99));
-      const radio = radioCapa(t, ang);
-      xDeseado = Math.sin(ang) * radio;
-      z = Math.cos(ang) * radio * haciaCamara;
-      y = alturaEn(t);
-      rotY = Math.atan2(xDeseado, z) + azar(-0.35, 0.35);
+      const punto = puntoSobreMallaArbol(clientX, clientY);
+      if (!punto) {
+        mostrarAviso('Suelta el adorno sobre el arbol.');
+        return false;
+      }
+      xDeseado = punto.x;
+      y = punto.y;
+      z = punto.z;
+      rotY = Math.atan2(xDeseado, z) + azar(-0.22, 0.22);
       escalaBase = azar(1.12, 1.3);
     }
 
@@ -2190,9 +2338,13 @@ import * as THREE from 'three';
     return NUBE_BASE + '/' + NUBE_RUTA_MUSICAS + (id ? '/' + encodeURIComponent(id) : '') + '.json';
   }
 
-  async function pedirConTiempo(url, opciones = {}) {
+  function urlNubeMusicaDatos(id, indice) {
+    return NUBE_BASE + '/' + NUBE_RUTA_MUSICA_DATOS + '/' + encodeURIComponent(id) + '/' + indice + '.json';
+  }
+
+  async function pedirConTiempo(url, opciones = {}, tiempo = 6500) {
     const control = new AbortController();
-    const temporizador = setTimeout(() => control.abort(), 6500);
+    const temporizador = setTimeout(() => control.abort(), tiempo);
     const esLectura = !opciones.method || opciones.method === 'GET';
     const destino = url + (esLectura ? '?_=' + Date.now() : '');
     try {
@@ -2208,6 +2360,10 @@ import * as THREE from 'three';
 
   async function pedirNubeMusicas(id, opciones = {}) {
     return pedirConTiempo(urlNubeMusicas(id), opciones);
+  }
+
+  async function pedirNubeMusicaDatos(id, indice, opciones = {}) {
+    return pedirConTiempo(urlNubeMusicaDatos(id, indice), opciones, 30000);
   }
 
   async function enviarAdorno(registro) {
@@ -2303,6 +2459,7 @@ import * as THREE from 'three';
     crearEscena3D();
     ajustarEscena();
     if (!localRestaurado) {
+      limpiarClavesAdornosAntiguas();
       restaurarLocal();
       localRestaurado = true;
     }
