@@ -4,9 +4,9 @@
 | --- | --- |
 | Proyecto | INEFARIUM / erizos |
 | Tipo de documento | Especificación funcional (SDD - Specification-Driven Development) |
-| Versión | 1.2 |
-| Fecha | 2026-11-24 |
-| Estado | Tema Navidad con persistencia Firebase implementado |
+| Versión | 1.3 |
+| Fecha | 2026-11-26 |
+| Estado | Tema Navidad con persistencia Firebase, variantes y guirnalda implementados |
 | Repositorio | https://github.com/inefarium/erizos |
 | Alcance del documento | Comportamiento funcional, datos, configuración y criterios de aceptación del sitio actual |
 
@@ -166,6 +166,7 @@ Los plugins deben importarse **después** de `opciones-temas.js`; si no, muestra
 | Mensaje flotante del calendario | 60 | `calabaza.js` |
 | Adorno fantasma durante el arrastre | 80 | `navidad-chamoys.js` |
 | Aviso del tema Navidad | 90 | `navidad-chamoys.js` |
+| Menú del muñeco / paleta de colores | 93 / 96 | `navidad-chamoys.js` |
 
 Regla de composición: el texto principal siempre queda por encima de los overlays de tema, salvo efectos explícitamente pensados para pasar por encima (fuegos del regalo, mensajes, hojita, sorpresa).
 
@@ -450,6 +451,12 @@ window.CalabazaHalloween = {
 | RF-13.15 | Limitar el árbol a 48 adornos y avisar cuando esté lleno | Baja |
 | RF-13.16 | Pausar las animaciones al desactivar el tema o al ocultar la pestaña | Media |
 | RF-13.17 | Al desactivar, restaurar títulos y corazón, cancelar arrastres y limpiar avisos | Alta |
+| RF-13.18 | Añadir una guirnalda navideña de luces multicolor con parpadeo suave, cable cálido, aura alrededor del árbol y luz cálida puntual | Media |
+| RF-13.19 | Ofrecer 4 variantes de color por cada tipo de adorno desde el catálogo, sin alterar los adornos ya colocados | Alta |
+| RF-13.20 | Permitir quitar el último adorno colocado, actualizando almacenamiento local y borrando su registro de Firebase | Alta |
+| RF-13.21 | Mantener los borrados pendientes en `localStorage` para que un adorno eliminado sin conexión no reaparezca al sincronizar | Alta |
+| RF-13.22 | Adaptar escena, paneles, menú del muñeco, tipografías y cámara 3D a móvil y tablet sin cortes ni solapamientos | Alta |
+| RF-13.23 | Aumentar el tamaño del árbol manteniendo su estilo holográfico y sin desbordar el lienzo | Media |
 
 **Nube:**
 
@@ -457,11 +464,12 @@ window.CalabazaHalloween = {
 - Ruta separada de las películas: `calabaza/navidad/adornos`.
 - Lectura: `GET .../calabaza/navidad/adornos.json`.
 - Escritura: `PUT .../calabaza/navidad/adornos/<id>.json`.
+- Borrado: `DELETE .../calabaza/navidad/adornos/<id>.json`.
 - No requiere credenciales ni variables de entorno; usa la misma base pública que el calendario.
-- Sin conexión: modo local; los adornos se mantienen y se encolan para subirlos después.
+- Sin conexión: modo local; los adornos se mantienen y se encolan para subirlos después. Los borrados también se encolan y se aplican al reconectar.
 - Si dos estrellas llegan de fuentes distintas, solo se restaura la primera.
 
-**API pública:** `window.NavidadChamoys = { activar(), desactivar(), adornos(), activo(), registros(), sincronizar(), estrellaPermitida(), nube() }`.
+**API pública:** `window.NavidadChamoys = { activar(), desactivar(), adornos(), activo(), registros(), sincronizar(), quitarUltimo(), estrellaPermitida(), nube() }`.
 
 ### 7.14 RF-14 - Libro de fotos (`libro.html`)
 
@@ -556,6 +564,7 @@ abierto --(Cerrar/Escape)--> cerrado
 | `calabaza_musica_v1` | Índice de la canción elegida | `calabaza.js` |
 | `navidad_chamoys_adornos_v2` | JSON con los adornos colocados | `navidad-chamoys.js` |
 | `navidad_chamoys_pendientes_v2` | IDs de adornos pendientes de subir | `navidad-chamoys.js` |
+| `navidad_chamoys_borrados_v2` | IDs de adornos pendientes de borrar en la nube | `navidad-chamoys.js` |
 | `navidad_chamoys_musicas_v1` | Metadatos de pistas subidas y, en registros antiguos, su data URL | `navidad-chamoys.js` |
 | `navidad_chamoys_musica_sel_v1` | Índice de la pista de Navidad elegida | `navidad-chamoys.js` |
 

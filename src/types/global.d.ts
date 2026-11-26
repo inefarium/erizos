@@ -34,8 +34,9 @@ declare global {
         creado: string;
       }>;
       sincronizar: () => Promise<boolean>;
+      quitarUltimo: () => boolean;
       estrellaPermitida: () => boolean;
-      nube: () => { url: string; ruta: string; pendientes: number };
+      nube: () => { url: string; ruta: string; pendientes: number; borrados: number };
     };
   }
 }

@@ -12,13 +12,19 @@ import * as THREE from 'three';
   const MAX_DPR = Math.min(window.devicePixelRatio || 1, 1.75);
   const MAX_DPR_NIEVE = Math.min(window.devicePixelRatio || 1, 1.5);
   const VELOCIDAD_GIRO = 0.12;
+  const DISTANCIA_CAMARA = 5.35;
   const ALTO_ARBOL = 2.55;
   const RADIO_BASE = 0.96;
   const BASE_Y = -1.18;
+  const MUNECO_BASE_X = -0.72;
+  const MUNECO_BASE_Y = BASE_Y - 0.10;
+  const MUNECO_BASE_Z = 1.05;
+  const MUNECO_ESCALA = 0.82;
   const DURACION_NACIMIENTO = 420;
   const MAX_ADORNOS = 48;
   const CLAVE_LOCAL = 'navidad_chamoys_adornos_v2';
   const CLAVE_PENDIENTES = 'navidad_chamoys_pendientes_v2';
+  const CLAVE_BORRADOS = 'navidad_chamoys_borrados_v2';
   const CLAVES_ADORNOS_LEGACY = ['navidad_chamoys_adornos_v1', 'navidad_chamoys_pendientes_v1'];
   const CLAVE_MUSICAS = 'navidad_chamoys_musicas_v1';
   const CLAVE_MUSICA_SEL = 'navidad_chamoys_musica_sel_v1';
@@ -88,6 +94,19 @@ import * as THREE from 'three';
   const ADORNOS_POR_TIPO = new Map(ADORNOS.map((adorno) => [adorno.tipo, adorno]));
   const TIPOS_VALIDOS = new Set(ADORNOS.map((adorno) => adorno.tipo));
   const COLORES_NIEVE = ['#8ffcff', '#bff8ff', '#3fb8ff', '#6bffb8', '#ffffff'];
+  const VARIANTES_POR_TIPO = {
+    bola: ['#ff5f7e', '#6bffb8', '#8ffcff', '#ffd27a'],
+    estrella: ['#ffd27a', '#bff8ff', '#ff9ad5', '#a6ffd6'],
+    campana: ['#ffa54d', '#6bffb8', '#8ffcff', '#ffcf7a'],
+    copo: ['#8ffcff', '#bff8ff', '#6bffb8', '#ff9ad5'],
+    regalo: ['#ff4fd8', '#6bffb8', '#8ffcff', '#ffcf7a'],
+    lazo: ['#6bffb8', '#ff5f9a', '#8ffcff', '#ffcf7a'],
+    caramelo: ['#ff4d6d', '#6bffb8', '#8ffcff', '#ffcf7a'],
+    galleta: ['#e9ad68', '#c98a4b', '#ffcf7a', '#bff8ff'],
+    pina: ['#c98a4b', '#ffcf7a', '#6bffb8', '#8ffcff'],
+    vela: ['#ffe3a3', '#ff9ad5', '#8ffcff', '#ffcf7a']
+  };
+  const COLORES_LUCES = [0xffcf7a, 0xffa54d, 0xff5f9a, 0x8ffcff, 0x6bffb8, 0x00f0ff];
 
   const ICONOS = {
     bola: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 5.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8.6 13c.2-2 1.5-3.4 3.4-3.7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" opacity=".75"/></svg>',
@@ -141,7 +160,9 @@ import * as THREE from 'three';
     .navidad-halo {
       position: absolute; right: -9vw; top: 50%; width: min(68vw, 66vh);
       aspect-ratio: 1 / 1; transform: translateY(-50%); border-radius: 50%;
-      background: radial-gradient(circle, rgba(126,220,255,.30) 0%, rgba(56,150,255,.15) 36%, rgba(24,86,190,.05) 58%, transparent 72%);
+      background:
+        radial-gradient(circle at 50% 48%, rgba(255,190,112,.13) 0%, rgba(255,165,77,.05) 34%, transparent 52%),
+        radial-gradient(circle, rgba(126,220,255,.30) 0%, rgba(56,150,255,.15) 36%, rgba(24,86,190,.05) 58%, transparent 72%);
       animation: nw-latido 6.5s ease-in-out infinite;
     }
     .navidad-suelo {
@@ -153,8 +174,8 @@ import * as THREE from 'three';
     .navidad-nieve { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
     .navidad-escena {
-      position: absolute; right: clamp(0vw, 3vw, 5vw); top: 51%;
-      width: min(48vw, 68vh); height: min(78vh, 100vw);
+      position: absolute; right: clamp(0vw, 2vw, 4vw); top: 51%;
+      width: min(54vw, 76vh); height: min(86vh, 108vw);
       transform: translateY(-50%);
     }
     .navidad-escena::before {
@@ -174,6 +195,7 @@ import * as THREE from 'three';
     .navidad-catalogo, .navidad-musica {
       position: absolute; left: clamp(12px, 3vw, 52px); top: 50%; transform: translateY(-50%);
       width: clamp(218px, 21vw, 262px); padding: 13px 13px 11px;
+      max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain;
       background: linear-gradient(180deg, rgba(4,10,20,.92), rgba(2,5,12,.95));
       border: 1px solid rgba(143,252,255,.30); border-radius: 10px;
       box-shadow: 0 0 20px rgba(0,180,255,.14), inset 0 0 26px rgba(80,190,255,.06);
@@ -200,16 +222,16 @@ import * as THREE from 'three';
       color: #fff; border-color: rgba(143,252,255,.6); background: rgba(0,240,255,.14); outline: none;
     }
     .navidad-cabecera h2 {
-      margin: 0 0 3px; font-size: .74rem; font-weight: normal; letter-spacing: 1.7px;
+      margin: 0 0 3px; font-size: .80rem; font-weight: normal; letter-spacing: 1.7px;
       text-transform: uppercase; color: var(--nw-hielo); text-shadow: 0 0 9px rgba(0,240,255,.55);
     }
     .navidad-cabecera p {
-      margin: 0 0 8px; font-size: .56rem; letter-spacing: .7px; color: var(--nw-dorado);
+      margin: 0 0 8px; font-size: .62rem; letter-spacing: .7px; color: var(--nw-dorado);
       opacity: .8; text-transform: uppercase;
     }
     .navidad-nube {
       display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0 0 9px;
-      font-size: .5rem; letter-spacing: .5px; color: rgba(255,207,122,.66); text-transform: uppercase;
+      font-size: .56rem; letter-spacing: .5px; color: rgba(255,207,122,.66); text-transform: uppercase;
     }
     .navidad-nube i {
       flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%; background: var(--nw-dorado);
@@ -223,26 +245,75 @@ import * as THREE from 'three';
 
     .navidad-lista { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 7px; }
 
+    .navidad-chip-wrap { position: relative; display: flex; min-width: 0; }
+
     .navidad-chip {
       appearance: none; -webkit-appearance: none; position: relative; display: flex;
       flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-      min-height: 58px; padding: 6px 4px; font-family: inherit; font-size: .54rem;
+      width: 100%; min-height: 62px; padding: 6px 4px; font-family: inherit; font-size: .60rem;
       letter-spacing: .25px; color: var(--adorno); background: rgba(0,0,0,.42);
       border: 1px solid rgba(143,252,255,.20); border-radius: 7px; cursor: grab;
       touch-action: none; transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
     }
-    .navidad-chip svg { width: 27px; height: 27px; filter: drop-shadow(0 0 3px var(--adorno)); }
+    .navidad-chip svg { width: 29px; height: 29px; filter: drop-shadow(0 0 3px var(--adorno)); }
     .navidad-chip:hover { transform: translateY(-2px); border-color: rgba(143,252,255,.48); box-shadow: 0 0 13px -2px var(--adorno); }
     .navidad-chip:active { cursor: grabbing; transform: scale(.97); }
     .navidad-chip:focus-visible { outline: 1px solid var(--nw-hielo); outline-offset: 2px; }
     .navidad-chip[data-tipo="estrella"]::after {
       content: "25 DIC"; position: absolute; top: 3px; right: 3px; padding: 1px 3px;
       border: 1px solid rgba(255,207,122,.32); border-radius: 3px;
-      font-size: .38rem; line-height: 1.25; letter-spacing: .3px; color: var(--nw-dorado); opacity: .82;
+      font-size: .42rem; line-height: 1.25; letter-spacing: .3px; color: var(--nw-dorado); opacity: .82;
     }
 
+    .navidad-variante {
+      position: absolute; right: 3px; bottom: 3px; z-index: 2;
+      width: 20px; height: 20px; padding: 0; display: flex; align-items: center; justify-content: center;
+      appearance: none; -webkit-appearance: none; cursor: pointer; border-radius: 50%;
+      background: rgba(2,8,16,.86); border: 1px solid rgba(143,252,255,.34);
+      box-shadow: 0 0 8px rgba(0,200,255,.14);
+      transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+    }
+    .navidad-variante::before {
+      content: ""; width: 11px; height: 11px; border-radius: 50%;
+      background: conic-gradient(#ffcf7a, #ff5f9a, #8ffcff, #6bffb8, #ffcf7a);
+      box-shadow: 0 0 6px rgba(143,252,255,.4);
+    }
+    .navidad-variante:hover, .navidad-variante:focus-visible {
+      border-color: rgba(143,252,255,.7); box-shadow: 0 0 12px rgba(0,240,255,.3); outline: none; transform: scale(1.06);
+    }
+
+    .navidad-paleta {
+      position: fixed; z-index: 96; display: none; align-items: center; gap: 5px; padding: 6px 7px;
+      background: linear-gradient(180deg, rgba(4,10,20,.98), rgba(2,5,12,.99));
+      border: 1px solid rgba(143,252,255,.42); border-radius: 8px;
+      box-shadow: 0 0 20px rgba(0,180,255,.22), inset 0 0 16px rgba(80,190,255,.08);
+      pointer-events: auto;
+    }
+    .navidad-paleta.abierta { display: flex; }
+    .navidad-sabor {
+      width: 19px; height: 19px; padding: 0; appearance: none; -webkit-appearance: none; cursor: pointer;
+      border-radius: 50%; background: var(--sabor); border: 1px solid rgba(255,255,255,.5);
+      box-shadow: 0 0 7px var(--sabor);
+      transition: transform .12s ease, border-color .12s ease;
+    }
+    .navidad-sabor:hover, .navidad-sabor:focus-visible { transform: scale(1.12); border-color: #fff; outline: none; }
+    .navidad-sabor.activo { border-color: #fff; outline: 1px solid rgba(255,255,255,.75); outline-offset: 1px; }
+
+    .navidad-quitar {
+      appearance: none; -webkit-appearance: none; display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; margin-top: 8px; padding: 7px 8px; cursor: pointer;
+      font-family: inherit; font-size: .62rem; letter-spacing: .4px; text-transform: uppercase;
+      color: #ffb0c8; background: rgba(255,95,154,.08);
+      border: 1px dashed rgba(255,95,154,.42); border-radius: 7px;
+      transition: background .15s ease, border-color .15s ease, opacity .15s ease;
+    }
+    .navidad-quitar:hover, .navidad-quitar:focus-visible {
+      background: rgba(255,95,154,.15); border-color: rgba(255,95,154,.72); outline: none;
+    }
+    .navidad-quitar:disabled { opacity: .34; cursor: not-allowed; }
+
     .navidad-ayuda {
-      margin: 9px 0 0; font-size: .54rem; line-height: 1.45; letter-spacing: .2px;
+      margin: 9px 0 0; font-size: .60rem; line-height: 1.45; letter-spacing: .2px;
       color: rgba(191,248,255,.62);
     }
 
@@ -268,7 +339,7 @@ import * as THREE from 'three';
     .navidad-muneco-etiqueta {
       position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%);
       padding: 2px 7px; border-radius: 20px; white-space: nowrap;
-      font-size: .46rem; letter-spacing: 1px; text-transform: uppercase;
+      font-size: .54rem; letter-spacing: 1px; text-transform: uppercase;
       color: var(--nw-hielo); background: rgba(3,10,20,.78);
       border: 1px solid rgba(143,252,255,.28); box-shadow: 0 0 12px rgba(0,200,255,.16);
       pointer-events: none;
@@ -291,13 +362,13 @@ import * as THREE from 'three';
     }
     .navidad-menu-titulo {
       margin: 0 0 8px; padding-bottom: 7px; border-bottom: 1px solid rgba(143,252,255,.18);
-      font-size: .58rem; letter-spacing: 1.4px; text-transform: uppercase;
+      font-size: .64rem; letter-spacing: 1.4px; text-transform: uppercase;
       color: var(--nw-hielo); text-shadow: 0 0 9px rgba(0,240,255,.5);
     }
     .navidad-menu-opcion {
       appearance: none; -webkit-appearance: none; display: flex; align-items: center; gap: 8px;
       width: 100%; margin: 0 0 6px; padding: 8px 9px; cursor: pointer;
-      font-family: inherit; font-size: .62rem; letter-spacing: .55px; text-align: left;
+      font-family: inherit; font-size: .70rem; letter-spacing: .55px; text-align: left;
       color: var(--nw-hielo); background: rgba(0,0,0,.34);
       border: 1px solid rgba(143,252,255,.18); border-radius: 7px;
       transition: border-color .15s ease, background .15s ease, color .15s ease;
@@ -313,14 +384,14 @@ import * as THREE from 'three';
     }
 
     .navidad-musica-cabecera h2 {
-      margin: 0 24px 8px 0; font-size: .7rem; font-weight: normal; letter-spacing: 1.7px;
+      margin: 0 24px 8px 0; font-size: .76rem; font-weight: normal; letter-spacing: 1.7px;
       text-transform: uppercase; color: var(--nw-hielo); text-shadow: 0 0 9px rgba(0,240,255,.55);
     }
     .navidad-musica-lista { display: flex; flex-direction: column; gap: 5px; max-height: 34vh; overflow-y: auto; overscroll-behavior: contain; }
     .navidad-pista {
       appearance: none; -webkit-appearance: none; display: flex; align-items: center; gap: 7px;
       width: 100%; padding: 6px 7px; cursor: pointer; text-align: left;
-      font-family: inherit; font-size: .56rem; letter-spacing: .2px; color: rgba(191,248,255,.82);
+      font-family: inherit; font-size: .63rem; letter-spacing: .2px; color: rgba(191,248,255,.82);
       background: rgba(0,0,0,.34); border: 1px solid rgba(143,252,255,.14); border-radius: 6px;
       transition: border-color .15s ease, color .15s ease, background .15s ease;
     }
@@ -332,26 +403,26 @@ import * as THREE from 'three';
       box-shadow: 0 0 14px rgba(107,255,184,.12);
     }
     .navidad-pista.activa::before { content: "▶"; }
-    .navidad-musica-vacia { margin: 4px 0; font-size: .54rem; color: rgba(191,248,255,.5); text-align: center; }
+    .navidad-musica-vacia { margin: 4px 0; font-size: .60rem; color: rgba(191,248,255,.5); text-align: center; }
 
     .navidad-musica-controles { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
     .navidad-musica-boton {
-      appearance: none; -webkit-appearance: none; width: 28px; height: 26px; cursor: pointer;
+      appearance: none; -webkit-appearance: none; width: 30px; height: 28px; cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      font-family: inherit; font-size: .72rem; color: var(--nw-hielo);
+      font-family: inherit; font-size: .78rem; color: var(--nw-hielo);
       background: rgba(0,0,0,.34); border: 1px solid rgba(143,252,255,.24); border-radius: 6px;
       transition: border-color .15s ease, background .15s ease;
     }
     .navidad-musica-boton:hover, .navidad-musica-boton:focus-visible {
       border-color: rgba(143,252,255,.55); background: rgba(0,240,255,.12); outline: none;
     }
-    .navidad-musica-vol { display: flex; align-items: center; gap: 5px; margin-left: auto; font-size: .5rem; color: rgba(191,248,255,.7); }
-    .navidad-musica-vol input { width: 58px; accent-color: #6bffb8; cursor: pointer; }
+    .navidad-musica-vol { display: flex; align-items: center; gap: 5px; margin-left: auto; font-size: .56rem; color: rgba(191,248,255,.7); }
+    .navidad-musica-vol input { width: 64px; accent-color: #6bffb8; cursor: pointer; }
 
     .navidad-musica-subir {
       appearance: none; -webkit-appearance: none; display: flex; align-items: center; justify-content: center; gap: 6px;
       width: 100%; margin-top: 8px; padding: 7px 8px; cursor: pointer;
-      font-family: inherit; font-size: .56rem; letter-spacing: .5px; text-transform: uppercase;
+      font-family: inherit; font-size: .62rem; letter-spacing: .5px; text-transform: uppercase;
       color: var(--nw-verde); background: rgba(107,255,184,.08);
       border: 1px dashed rgba(107,255,184,.42); border-radius: 7px;
       transition: background .15s ease, border-color .15s ease;
@@ -359,7 +430,7 @@ import * as THREE from 'three';
     .navidad-musica-subir:hover, .navidad-musica-subir:focus-visible {
       background: rgba(107,255,184,.15); border-color: rgba(107,255,184,.7); outline: none;
     }
-    .navidad-musica-estado { margin: 7px 0 0; font-size: .48rem; line-height: 1.4; color: rgba(191,248,255,.55); text-align: center; }
+    .navidad-musica-estado { margin: 7px 0 0; font-size: .56rem; line-height: 1.45; color: rgba(191,248,255,.55); text-align: center; }
     .navidad-musica-estado[data-estado="error"] { color: #ff8fa8; }
     .navidad-musica-estado[data-estado="ok"] { color: var(--nw-verde); }
 
@@ -368,7 +439,7 @@ import * as THREE from 'three';
       max-width: min(88vw, 470px); padding: 9px 14px; border-radius: 7px;
       background: rgba(7,3,2,.94); border: 1px solid rgba(255,207,122,.46);
       box-shadow: 0 0 22px rgba(255,165,77,.18); color: var(--nw-dorado);
-      font-size: .67rem; line-height: 1.45; letter-spacing: .2px; text-align: center;
+      font-size: .72rem; line-height: 1.45; letter-spacing: .2px; text-align: center;
       opacity: 0; pointer-events: none; transform: translate(-50%, 10px);
       transition: opacity .2s ease, transform .2s ease;
     }
@@ -388,49 +459,73 @@ import * as THREE from 'three';
 
     .lista-temas { max-height: calc(100vh - 84px); overflow-y: auto; overscroll-behavior: contain; }
 
-    @media (max-width: 760px) {
+    @media (max-width: 900px), (max-width: 1100px) and (orientation: portrait) {
       .navidad-escena {
-        right: 50%; top: 42%; transform: translate(50%,-50%);
-        width: min(98vw, 68vh); height: min(78vh, 122vw);
+        right: 50%; top: 45%; transform: translate(50%,-50%);
+        width: 100vw; height: min(88vh, 132vw);
       }
-      .navidad-halo { right: 50%; top: 40%; transform: translate(50%,-50%); width: 104vw; }
-      .navidad-suelo { width: 100vw; }
+      .navidad-halo { right: 50%; top: 43%; transform: translate(50%,-50%); width: 108vw; }
+      .navidad-suelo { width: 108vw; }
       .navidad-catalogo, .navidad-musica {
-        left: 8px; right: 8px; top: auto; bottom: 8px; width: auto;
-        transform: none; padding: 8px 9px 9px;
+        left: 6px; right: 6px; top: auto;
+        bottom: calc(6px + env(safe-area-inset-bottom, 0px)); width: auto;
+        max-height: calc(100dvh - 20px);
+        transform: none; padding: 9px 10px 10px;
       }
       .navidad-catalogo.abierto, .navidad-musica.abierto { animation: none; }
-      .navidad-cabecera h2, .navidad-musica-cabecera h2 { margin-bottom: 5px; text-align: center; }
+      .navidad-cabecera h2, .navidad-musica-cabecera h2 { margin-bottom: 5px; font-size: .82rem; text-align: center; }
       .navidad-cabecera p, .navidad-ayuda { display: none; }
-      .navidad-nube { justify-content: center; margin: 0 0 6px; }
-      .navidad-lista { grid-template-columns: repeat(5, minmax(0,1fr)); gap: 4px; }
-      .navidad-chip { min-height: 46px; padding: 3px 2px; }
-      .navidad-chip svg { width: 23px; height: 23px; }
+      .navidad-nube { justify-content: center; margin: 0 0 7px; font-size: .58rem; }
+      .navidad-lista { grid-template-columns: repeat(5, minmax(0,1fr)); gap: 5px; }
+      .navidad-chip { min-height: 50px; padding: 4px 2px; font-size: .56rem; }
+      .navidad-chip svg { width: 25px; height: 25px; }
       .navidad-chip span { display: none; }
-      .navidad-musica-lista { max-height: 24vh; }
-      .navidad-muneco-menu { left: 10vw; right: auto; bottom: 26vh; width: min(210px, 66vw); transform: none; }
-      .navidad-aviso { bottom: 158px; }
+      .navidad-chip[data-tipo="estrella"]::after { font-size: .38rem; top: 2px; right: 2px; }
+      .navidad-variante { width: 19px; height: 19px; right: 2px; bottom: 2px; }
+      .navidad-variante::before { width: 10px; height: 10px; }
+      .navidad-quitar { font-size: .66rem; padding: 8px; margin-top: 7px; }
+      .navidad-musica-lista { max-height: 26vh; }
+      .navidad-pista { font-size: .66rem; }
+      .navidad-musica-estado { font-size: .60rem; }
+      .navidad-musica-subir { font-size: .66rem; }
+      .navidad-musica-vol { font-size: .58rem; }
+      .navidad-muneco-menu {
+        left: 50%; right: auto; bottom: calc(24vh + env(safe-area-inset-bottom, 0px));
+        width: min(280px, 90vw); transform: translateX(-50%);
+      }
+      .navidad-menu-titulo { font-size: .68rem; }
+      .navidad-menu-opcion { font-size: .74rem; padding: 9px 10px; }
+      .navidad-menu-opcion::before { width: 15px; height: 15px; }
+      .navidad-aviso {
+        bottom: calc(180px + env(safe-area-inset-bottom, 0px));
+        max-width: 92vw; font-size: .74rem;
+      }
     }
 
     @media (max-height: 560px) {
       .navidad-escena {
         right: 2vw; top: 50%; transform: translateY(-50%);
-        width: min(58vw, 64vh); height: min(92vh, 82vw);
+        width: min(62vw, 70vh); height: min(96vh, 88vw);
       }
-      .navidad-halo { right: -6vw; top: 50%; transform: translateY(-50%); width: 72vw; }
+      .navidad-halo { right: -6vw; top: 50%; transform: translateY(-50%); width: 76vw; }
       .navidad-catalogo, .navidad-musica {
-        left: 8px; right: auto; top: 8px; bottom: 8px; width: 190px;
+        left: 8px; right: auto; top: 8px; bottom: 8px; width: 196px;
+        max-height: calc(100vh - 16px);
         transform: none; overflow-y: auto; padding: 8px;
       }
       .navidad-catalogo.abierto, .navidad-musica.abierto { animation: none; }
-      .navidad-cabecera h2, .navidad-musica-cabecera h2 { font-size: .66rem; }
+      .navidad-cabecera h2, .navidad-musica-cabecera h2 { font-size: .70rem; }
       .navidad-cabecera p, .navidad-ayuda { display: none; }
-      .navidad-nube { margin-bottom: 6px; }
+      .navidad-nube { margin-bottom: 6px; font-size: .54rem; }
       .navidad-lista { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px; }
-      .navidad-chip { min-height: 40px; }
-      .navidad-chip svg { width: 21px; height: 21px; }
-      .navidad-chip span { font-size: .48rem; }
-      .navidad-muneco-menu { bottom: 10px; right: 12px; }
+      .navidad-chip { min-height: 44px; }
+      .navidad-chip svg { width: 23px; height: 23px; }
+      .navidad-chip span { font-size: .54rem; }
+      .navidad-chip[data-tipo="estrella"]::after { font-size: .38rem; }
+      .navidad-variante { width: 18px; height: 18px; }
+      .navidad-variante::before { width: 9px; height: 9px; }
+      .navidad-quitar { font-size: .58rem; padding: 6px; }
+      .navidad-muneco-menu { left: auto; right: 12px; bottom: 10px; transform: none; }
       .navidad-aviso { bottom: 14px; }
     }
   `;
@@ -463,7 +558,8 @@ import * as THREE from 'three';
         <div class="navidad-nube" data-estado="local"><i></i><span>Guardado local</span></div>
       </div>
       <div class="navidad-lista"></div>
-      <p class="navidad-ayuda">Arrastra un adorno y sueltalo sobre el arbol. La estrella solo se permite el 25 de diciembre.</p>
+      <button class="navidad-quitar" type="button">Quitar ultimo adorno</button>
+      <p class="navidad-ayuda">Arrastra un adorno y sueltalo sobre el arbol. Usa el punto de color para cambiar su tono. La estrella solo se permite el 25 de diciembre.</p>
     </aside>
     <aside class="navidad-musica" aria-label="Musica de navidad">
       <button class="navidad-cerrar" type="button" aria-label="Cerrar musica">×</button>
@@ -483,6 +579,7 @@ import * as THREE from 'three';
       <input class="navidad-musica-archivo" type="file" accept="audio/*" hidden>
       <p class="navidad-musica-estado" data-estado="local">Sin limite de tamano. Las pistas se guardan en Firebase.</p>
     </aside>
+    <div class="navidad-paleta" aria-label="Colores del adorno"></div>
     <div class="navidad-aviso" role="status" aria-live="polite"></div>
   `;
   document.body.appendChild(overlay);
@@ -492,6 +589,8 @@ import * as THREE from 'three';
   const lienzoNieve = overlay.querySelector('.navidad-nieve');
   const catalogoEl = overlay.querySelector('.navidad-catalogo');
   const listaEl = overlay.querySelector('.navidad-lista');
+  const quitarEl = overlay.querySelector('.navidad-quitar');
+  const paletaEl = overlay.querySelector('.navidad-paleta');
   const avisoEl = overlay.querySelector('.navidad-aviso');
   const nubeEl = overlay.querySelector('.navidad-nube');
   const nubeTextoEl = nubeEl.querySelector('span');
@@ -505,6 +604,9 @@ import * as THREE from 'three';
   const volumenEl = overlay.querySelector('.navidad-musica-vol input');
 
   ADORNOS.forEach((adorno) => {
+    const envoltura = document.createElement('div');
+    envoltura.className = 'navidad-chip-wrap';
+
     const boton = document.createElement('button');
     boton.type = 'button';
     boton.className = 'navidad-chip';
@@ -517,7 +619,28 @@ import * as THREE from 'three';
     boton.addEventListener('pointerdown', alPresionarAdorno);
     boton.addEventListener('dragstart', (e) => e.preventDefault());
     boton.addEventListener('contextmenu', (e) => e.preventDefault());
-    listaEl.appendChild(boton);
+
+    const botonVariante = document.createElement('button');
+    botonVariante.type = 'button';
+    botonVariante.className = 'navidad-variante';
+    botonVariante.setAttribute('aria-label', 'Cambiar color de ' + adorno.etiqueta);
+    botonVariante.setAttribute('aria-haspopup', 'true');
+    botonVariante.setAttribute('aria-expanded', 'false');
+    botonVariante.title = 'Cambiar color';
+    botonVariante.addEventListener('pointerdown', (e) => e.stopPropagation());
+    botonVariante.addEventListener('click', (e) => {
+      e.stopPropagation();
+      abrirPaleta(boton, botonVariante);
+    });
+
+    envoltura.appendChild(boton);
+    envoltura.appendChild(botonVariante);
+    listaEl.appendChild(envoltura);
+  });
+
+  quitarEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    quitarUltimoAdorno();
   });
 
   let activo = false;
@@ -529,6 +652,9 @@ import * as THREE from 'three';
   let grupoArbol = null;
   let grupoMuneco = null;
   let grupoPolvo = null;
+  let grupoGuirnalda = null;
+  let grupoAuraArbol = null;
+  let luzGuirnalda = null;
   let lucesCalidas = null;
   let materialConcha = null;
   let mallaConcha = null;
@@ -546,12 +672,15 @@ import * as THREE from 'three';
 
   const adornosColocados = [];
   const adornosPorId = new Map();
+  const borradosSesion = new Set();
   const destellos = [];
   const copos = [];
   const cacheCopos = new Map();
+  actualizarBotonQuitar();
 
   const musicas = MUSICAS_DEFECTO.slice();
   let panelAbierto = null;
+  let paletaAbierta = null;
   let musicaIndice = -1;
   let cargandoMusicas = false;
   let musicasNubeCargadas = false;
@@ -578,7 +707,81 @@ import * as THREE from 'three';
     return true;
   }
 
+  function colocarPaleta(ancla) {
+    if (!paletaAbierta || !ancla) return;
+    const rect = ancla.getBoundingClientRect();
+    const ancho = paletaEl.offsetWidth;
+    const alto = paletaEl.offsetHeight;
+    let left = rect.left + rect.width / 2 - ancho / 2;
+    left = limitar(left, 8, Math.max(8, window.innerWidth - ancho - 8));
+    let top = rect.bottom + 6;
+    if (top + alto > window.innerHeight - 8) top = rect.top - alto - 6;
+    top = limitar(top, 8, Math.max(8, window.innerHeight - alto - 8));
+    paletaEl.style.left = Math.round(left) + 'px';
+    paletaEl.style.top = Math.round(top) + 'px';
+  }
+
+  function cerrarPaleta() {
+    if (!paletaAbierta) {
+      paletaEl.classList.remove('abierta');
+      return;
+    }
+    paletaAbierta.boton.setAttribute('aria-expanded', 'false');
+    paletaAbierta = null;
+    paletaEl.classList.remove('abierta');
+    paletaEl.innerHTML = '';
+  }
+
+  function aplicarVariante(chip, color) {
+    const tipo = chip.dataset.tipo;
+    const etiqueta = (ADORNOS_POR_TIPO.get(tipo) || {}).etiqueta || 'Adorno';
+    chip.dataset.color = color;
+    chip.style.setProperty('--adorno', color);
+    chip.setAttribute('aria-label', 'Arrastrar ' + etiqueta + ' (' + color + ') al arbol');
+    cerrarPaleta();
+  }
+
+  function abrirPaleta(chip, ancla) {
+    if (paletaAbierta && paletaAbierta.boton === ancla) {
+      cerrarPaleta();
+      return;
+    }
+    cerrarPaleta();
+    const tipo = chip.dataset.tipo;
+    const colores = VARIANTES_POR_TIPO[tipo] || [chip.dataset.color];
+    const actual = String(chip.dataset.color || '').toLowerCase();
+    paletaEl.innerHTML = '';
+    colores.forEach((color) => {
+      const sabor = document.createElement('button');
+      sabor.type = 'button';
+      sabor.className = 'navidad-sabor' + (color.toLowerCase() === actual ? ' activo' : '');
+      sabor.style.setProperty('--sabor', color);
+      sabor.setAttribute('aria-label', 'Usar color ' + color);
+      sabor.title = color;
+      sabor.addEventListener('click', (e) => {
+        e.stopPropagation();
+        aplicarVariante(chip, color);
+      });
+      paletaEl.appendChild(sabor);
+    });
+    paletaAbierta = { chip: chip, boton: ancla };
+    ancla.setAttribute('aria-expanded', 'true');
+    paletaEl.classList.add('abierta');
+    colocarPaleta(ancla);
+  }
+
+  document.addEventListener('pointerdown', (e) => {
+    if (!paletaAbierta) return;
+    if (paletaEl.contains(e.target) || paletaAbierta.boton.contains(e.target)) return;
+    cerrarPaleta();
+  }, true);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && paletaAbierta) cerrarPaleta();
+  });
+
   function cerrarPaneles() {
+    cerrarPaleta();
     panelAbierto = null;
     catalogoEl.classList.remove('abierto');
     musicaEl.classList.remove('abierto');
@@ -1373,6 +1576,118 @@ import * as THREE from 'three';
     return geometria;
   }
 
+  function construirGuirnaldaNavidad() {
+    const grupo = new THREE.Group();
+    grupo.name = 'guirnalda-navidad';
+    const colores = COLORES_LUCES.map((hex) => new THREE.Color(hex));
+    const posicionesPorColor = COLORES_LUCES.map(() => []);
+    const capas = [];
+    const tramos = [
+      { inicio: 0.07, fin: 0.93, vueltas: 3.6, desfase: 0.15, cantidad: 88 },
+      { inicio: 0.11, fin: 0.89, vueltas: 3.1, desfase: 2.30, cantidad: 80 },
+      { inicio: 0.16, fin: 0.85, vueltas: 2.7, desfase: 4.20, cantidad: 72 }
+    ];
+    let bombilla = 0;
+
+    tramos.forEach((tramo) => {
+      const puntos = [];
+      const pasos = 260;
+      for (let i = 0; i <= pasos; i++) {
+        const p = i / pasos;
+        const t = tramo.inicio + (tramo.fin - tramo.inicio) * p;
+        const ang = tramo.desfase + p * TAU * tramo.vueltas;
+        const radio = radioCapa(t, ang) + 0.045;
+        puntos.push(new THREE.Vector3(Math.cos(ang) * radio, alturaEn(t), Math.sin(ang) * radio));
+      }
+      const cable = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(puntos),
+        new THREE.LineBasicMaterial({
+          color: 0xd9a05a, transparent: true, opacity: 0.16,
+          blending: THREE.AdditiveBlending, depthWrite: false
+        })
+      );
+      cable.renderOrder = 6;
+      grupo.add(cable);
+
+      for (let i = 0; i < tramo.cantidad; i++) {
+        const p = (i + 0.5) / tramo.cantidad;
+        const t = tramo.inicio + (tramo.fin - tramo.inicio) * p;
+        const ang = tramo.desfase + p * TAU * tramo.vueltas;
+        const radio = radioCapa(t, ang) + 0.072;
+        const indiceColor = bombilla % COLORES_LUCES.length;
+        posicionesPorColor[indiceColor].push(
+          Math.cos(ang) * radio,
+          alturaEn(t) - 0.012,
+          Math.sin(ang) * radio
+        );
+        bombilla++;
+      }
+    });
+
+    posicionesPorColor.forEach((posiciones, indice) => {
+      if (!posiciones.length) return;
+      const geometria = new THREE.BufferGeometry();
+      geometria.setAttribute('position', new THREE.Float32BufferAttribute(posiciones, 3));
+      const material = new THREE.PointsMaterial({
+        color: colores[indice],
+        map: texturaPunto,
+        size: indice % 2 === 0 ? 0.092 : 0.076,
+        sizeAttenuation: true,
+        transparent: true,
+        opacity: 0.72,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        alphaTest: 0.02
+      });
+      const puntos = new THREE.Points(geometria, material);
+      puntos.renderOrder = 7;
+      grupo.add(puntos);
+      capas.push({
+        material: material,
+        fase: azar(0, TAU),
+        velocidad: azar(0.0008, 0.0017),
+        base: azar(0.52, 0.74),
+        amplitud: azar(0.14, 0.24)
+      });
+    });
+
+    grupo.userData.capas = capas;
+    return grupo;
+  }
+
+  function construirAuraNavidad() {
+    const cantidad = 130;
+    const posiciones = [];
+    const colores = [];
+    const calidos = [new THREE.Color(0xffcf7a), new THREE.Color(0xffa54d), new THREE.Color(0xffe3a3)];
+    const frios = [new THREE.Color(0x8ffcff), new THREE.Color(0x6bffb8)];
+    for (let i = 0; i < cantidad; i++) {
+      const t = Math.random();
+      const ang = Math.random() * TAU;
+      const radio = radioCapa(t, ang) + azar(0.12, 0.38);
+      posiciones.push(
+        Math.cos(ang) * radio,
+        alturaEn(t) + azar(-0.18, 0.2),
+        Math.sin(ang) * radio
+      );
+      const color = Math.random() < 0.68
+        ? calidos[(Math.random() * calidos.length) | 0]
+        : frios[(Math.random() * frios.length) | 0];
+      colores.push(color.r, color.g, color.b);
+    }
+    const geometria = new THREE.BufferGeometry();
+    geometria.setAttribute('position', new THREE.Float32BufferAttribute(posiciones, 3));
+    geometria.setAttribute('color', new THREE.Float32BufferAttribute(colores, 3));
+    const aura = new THREE.Points(geometria, new THREE.PointsMaterial({
+      map: texturaPunto, size: 0.155, sizeAttenuation: true, vertexColors: true,
+      transparent: true, opacity: 0.15, blending: THREE.AdditiveBlending,
+      depthWrite: false, alphaTest: 0.02
+    }));
+    aura.name = 'aura-arbol';
+    aura.renderOrder = 5;
+    return aura;
+  }
+
   function construirArbol() {
     const grupo = new THREE.Group();
     grupo.name = 'arbol-holografico';
@@ -1472,6 +1787,16 @@ import * as THREE from 'three';
     }));
     lucesCalidas.renderOrder = 6;
     grupo.add(lucesCalidas);
+
+    grupoGuirnalda = construirGuirnaldaNavidad();
+    grupo.add(grupoGuirnalda);
+
+    grupoAuraArbol = construirAuraNavidad();
+    grupo.add(grupoAuraArbol);
+
+    luzGuirnalda = new THREE.PointLight(0xffb86a, 3.4, 5.2, 2);
+    luzGuirnalda.position.set(0, 0.12, 0.82);
+    grupo.add(luzGuirnalda);
 
     return grupo;
   }
@@ -1627,8 +1952,12 @@ import * as THREE from 'three';
       grupo.add(rama2);
     });
 
-    grupo.position.set(-0.72, BASE_Y - 0.10, 1.05);
-    grupo.scale.setScalar(0.82);
+    grupo.position.set(MUNECO_BASE_X, MUNECO_BASE_Y, MUNECO_BASE_Z);
+    grupo.scale.setScalar(MUNECO_ESCALA);
+    grupo.userData.baseX = MUNECO_BASE_X;
+    grupo.userData.baseY = MUNECO_BASE_Y;
+    grupo.userData.baseZ = MUNECO_BASE_Z;
+    grupo.userData.escalaBase = MUNECO_ESCALA;
     return grupo;
   }
 
@@ -1637,7 +1966,7 @@ import * as THREE from 'three';
     try {
       escena = new THREE.Scene();
       camara = new THREE.PerspectiveCamera(36, 1, 0.1, 30);
-      camara.position.set(0, 0.06, 5.35);
+      camara.position.set(0, 0.06, DISTANCIA_CAMARA);
       camara.lookAt(0, -0.02, 0);
 
       renderer = new THREE.WebGLRenderer({
@@ -1686,7 +2015,20 @@ import * as THREE from 'three';
     const alto = Math.max(1, escenaEl.clientHeight);
     renderer.setSize(ancho, alto, false);
     camara.aspect = ancho / alto;
+
+    const medioFov = THREE.MathUtils.degToRad(camara.fov * 0.5);
+    const distanciaAlto = 1.58 / Math.tan(medioFov);
+    const distanciaAncho = 1.40 / (Math.tan(medioFov) * camara.aspect);
+    camara.position.z = limitar(Math.max(DISTANCIA_CAMARA, distanciaAlto, distanciaAncho), DISTANCIA_CAMARA, 9.2);
     camara.updateProjectionMatrix();
+
+    if (grupoMuneco) {
+      const estrecho = limitar((0.96 - camara.aspect) / 0.4, 0, 1);
+      grupoMuneco.scale.setScalar(MUNECO_ESCALA * (1 - 0.20 * estrecho));
+      grupoMuneco.position.x = MUNECO_BASE_X + 0.18 * estrecho;
+      grupoMuneco.position.z = MUNECO_BASE_Z + 0.08 * estrecho;
+      grupoMuneco.userData.baseY = MUNECO_BASE_Y + 0.08 * estrecho;
+    }
   }
 
   function materialAdorno(colorHex, opciones = {}) {
@@ -2004,6 +2346,50 @@ import * as THREE from 'three';
     guardarPendientes(leerPendientes().filter((pendiente) => pendiente !== id));
   }
 
+  function leerBorrados() {
+    try {
+      const datos = JSON.parse(leerAlmacen(CLAVE_BORRADOS) || '[]');
+      return Array.isArray(datos) ? datos.filter((id) => typeof id === 'string' && id) : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function guardarBorrados(ids) {
+    if (!ids.length) escribirAlmacen(CLAVE_BORRADOS, null);
+    else escribirAlmacen(CLAVE_BORRADOS, JSON.stringify(Array.from(new Set(ids))));
+  }
+
+  function encolarBorrado(id) {
+    const ids = leerBorrados();
+    if (!ids.includes(id)) ids.push(id);
+    guardarBorrados(ids);
+  }
+
+  function quitarBorrado(id) {
+    guardarBorrados(leerBorrados().filter((borrado) => borrado !== id));
+  }
+
+  function actualizarBotonQuitar() {
+    if (!quitarEl) return;
+    const vacio = adornosColocados.length === 0;
+    quitarEl.disabled = vacio;
+    quitarEl.setAttribute('aria-disabled', String(vacio));
+    quitarEl.title = vacio ? 'No hay adornos en el arbol' : 'Quitar el ultimo adorno colocado';
+  }
+
+  function liberarAdorno(adorno) {
+    const materiales = new Set();
+    adorno.traverse((hijo) => {
+      if (hijo.geometry) hijo.geometry.dispose();
+      if (hijo.material) {
+        const lista = Array.isArray(hijo.material) ? hijo.material : [hijo.material];
+        lista.forEach((material) => materiales.add(material));
+      }
+    });
+    materiales.forEach((material) => material.dispose());
+  }
+
   function normalizarRegistro(valor) {
     if (!valor || typeof valor !== 'object') return null;
     const id = String(valor.id || '').trim();
@@ -2059,6 +2445,7 @@ import * as THREE from 'three';
     grupoArbol.add(adorno);
     adornosColocados.push(adorno);
     adornosPorId.set(registro.id, adorno);
+    actualizarBotonQuitar();
     return adorno;
   }
 
@@ -2070,7 +2457,13 @@ import * as THREE from 'three';
     } catch (error) {
       registros = [];
     }
-    registros.forEach((valor) => agregarRegistro(normalizarRegistro(valor), false));
+    const borrados = new Set(leerBorrados());
+    borradosSesion.forEach((id) => borrados.add(id));
+    registros.forEach((valor) => {
+      const registro = normalizarRegistro(valor);
+      if (registro && !borrados.has(registro.id)) agregarRegistro(registro, false);
+    });
+    actualizarBotonQuitar();
   }
 
   function limpiarClavesAdornosAntiguas() {
@@ -2139,6 +2532,7 @@ import * as THREE from 'three';
     grupoArbol.add(adorno);
     adornosColocados.push(adorno);
     adornosPorId.set(adorno.userData.id, adorno);
+    actualizarBotonQuitar();
 
     const geometriaDestello = new THREE.RingGeometry(tipo === 'estrella' ? 0.085 : 0.055, tipo === 'estrella' ? 0.11 : 0.075, 26);
     const materialDestello = new THREE.MeshBasicMaterial({
@@ -2156,6 +2550,38 @@ import * as THREE from 'three';
     guardarLocal();
     encolarPendiente(registro.id);
     void enviarAdorno(registro);
+    return true;
+  }
+
+  function quitarUltimoAdorno() {
+    let adorno = null;
+    let fecha = -Infinity;
+    for (let i = 0; i < adornosColocados.length; i++) {
+      const candidato = adornosColocados[i];
+      const marca = Date.parse(candidato.userData.creado);
+      const valor = Number.isFinite(marca) ? marca : 0;
+      if (valor >= fecha) {
+        fecha = valor;
+        adorno = candidato;
+      }
+    }
+    if (!adorno) {
+      mostrarAviso('Todavia no hay adornos en el arbol.');
+      return false;
+    }
+    const id = adorno.userData.id;
+    const indice = adornosColocados.indexOf(adorno);
+    quitarPendiente(id);
+    if (indice >= 0) adornosColocados.splice(indice, 1);
+    adornosPorId.delete(id);
+    if (grupoArbol) grupoArbol.remove(adorno);
+    liberarAdorno(adorno);
+    guardarLocal();
+    encolarBorrado(id);
+    borradosSesion.add(id);
+    actualizarBotonQuitar();
+    mostrarAviso('Ultimo adorno retirado.');
+    void eliminarEnNube(id);
     return true;
   }
 
@@ -2195,14 +2621,30 @@ import * as THREE from 'three';
     if (!escenaLista) return;
     grupoArbol.rotation.y += dt * VELOCIDAD_GIRO;
     if (grupoMuneco) {
+      const baseY = Number.isFinite(grupoMuneco.userData.baseY) ? grupoMuneco.userData.baseY : MUNECO_BASE_Y;
       grupoMuneco.rotation.z = Math.sin(ahora * 0.0011) * 0.082;
       grupoMuneco.rotation.x = Math.sin(ahora * 0.0007 + 1.2) * 0.018;
-      grupoMuneco.position.y = BASE_Y - 0.10 + Math.sin(ahora * 0.0016) * 0.008;
+      grupoMuneco.position.y = baseY + Math.sin(ahora * 0.0016) * 0.008;
     }
     if (grupoPolvo) {
       grupoPolvo.rotation.y -= dt * 0.022;
       grupoPolvo.position.y = Math.sin(ahora * 0.0004) * 0.03;
     }
+    if (grupoGuirnalda) {
+      const capas = grupoGuirnalda.userData.capas || [];
+      for (let i = 0; i < capas.length; i++) {
+        const capa = capas[i];
+        capa.material.opacity = limitar(
+          capa.base + Math.sin(ahora * capa.velocidad + capa.fase) * capa.amplitud,
+          0.18, 1
+        );
+      }
+    }
+    if (grupoAuraArbol) {
+      grupoAuraArbol.material.opacity = 0.13 + Math.sin(ahora * 0.0009 + 0.8) * 0.045;
+      grupoAuraArbol.rotation.y -= dt * 0.012;
+    }
+    if (luzGuirnalda) luzGuirnalda.intensity = 3.4 + Math.sin(ahora * 0.0021 + 1.3) * 0.7;
     if (lucesCalidas) lucesCalidas.material.opacity = 0.68 + Math.sin(ahora * 0.0016) * 0.18;
     if (materialConcha) materialConcha.uniforms.uTiempo.value = ahora * 0.001;
     actualizarAdornos(ahora);
@@ -2376,12 +2818,42 @@ import * as THREE from 'three';
       });
       if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
       quitarPendiente(registro.id);
+      if (borradosSesion.has(registro.id)) {
+        const eliminado = await eliminarEnNube(registro.id);
+        if (eliminado) borradosSesion.delete(registro.id);
+        return eliminado;
+      }
       estadoNube('Nube al dia · ' + adornosColocados.length + ' adornos', 'nube');
       return true;
     } catch (error) {
       estadoNube('Sin conexion · local', 'error');
       return false;
     }
+  }
+
+  async function eliminarEnNube(id) {
+    estadoNube('Quitando en nube', 'guardando');
+    try {
+      const respuesta = await pedirNube(id, { method: 'DELETE' });
+      if (!respuesta.ok && respuesta.status !== 404) throw new Error('HTTP ' + respuesta.status);
+      quitarBorrado(id);
+      estadoNube('Nube al dia · ' + adornosColocados.length + ' adornos', 'nube');
+      return true;
+    } catch (error) {
+      encolarBorrado(id);
+      estadoNube('Sin conexion · local', 'error');
+      return false;
+    }
+  }
+
+  async function borrarPendientes() {
+    const ids = leerBorrados();
+    if (!ids.length) return true;
+    for (let i = 0; i < ids.length; i++) {
+      const borrado = await eliminarEnNube(ids[i]);
+      if (!borrado) return false;
+    }
+    return true;
   }
 
   async function subirPendientes() {
@@ -2404,6 +2876,7 @@ import * as THREE from 'three';
     sincronizandoNube = true;
     estadoNube('Sincronizando nube', 'guardando');
     try {
+      const borradosOk = await borrarPendientes();
       const respuesta = await pedirNube('', { headers: { Accept: 'application/json' } });
       if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
       const datos = await respuesta.json();
@@ -2413,17 +2886,23 @@ import * as THREE from 'three';
       } else if (datos && typeof datos === 'object') {
         lista = Object.keys(datos).map((id) => Object.assign({ id: id }, datos[id]));
       }
+      const borrados = new Set(leerBorrados());
+      borradosSesion.forEach((id) => borrados.add(id));
       let cambios = false;
       lista.forEach((valor) => {
         const registro = normalizarRegistro(valor);
-        if (registro && !adornosPorId.has(registro.id)) {
+        if (registro && !borrados.has(registro.id) && !adornosPorId.has(registro.id)) {
           if (agregarRegistro(registro, true)) cambios = true;
         }
       });
-      if (cambios) guardarLocal();
+      if (cambios) {
+        guardarLocal();
+        actualizarBotonQuitar();
+      }
       const pendientesOk = await subirPendientes();
-      if (pendientesOk) estadoNube('Nube al dia · ' + adornosColocados.length + ' adornos', 'nube');
-      return pendientesOk;
+      if (pendientesOk && borradosOk) estadoNube('Nube al dia · ' + adornosColocados.length + ' adornos', 'nube');
+      else estadoNube('Cambios pendientes · local', 'error');
+      return pendientesOk && borradosOk;
     } catch (error) {
       estadoNube('Sin conexion · local', 'error');
       return false;
@@ -2515,12 +2994,16 @@ import * as THREE from 'three';
   let tResize = null;
   window.addEventListener('resize', () => {
     if (!activo) return;
+    cerrarPaleta();
     clearTimeout(tResize);
     tResize = setTimeout(() => {
       ajustarEscena();
       reiniciarCopos();
     }, 120);
   });
+  window.addEventListener('scroll', () => {
+    if (paletaAbierta) cerrarPaleta();
+  }, true);
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
@@ -2547,7 +3030,8 @@ import * as THREE from 'three';
     activo: () => activo,
     registros: () => adornosColocados.map(registroDeAdorno),
     sincronizar: () => sincronizarNube(),
+    quitarUltimo: () => quitarUltimoAdorno(),
     estrellaPermitida: () => esDiaEstrella(),
-    nube: () => ({ url: NUBE_BASE, ruta: NUBE_RUTA, pendientes: leerPendientes().length })
+    nube: () => ({ url: NUBE_BASE, ruta: NUBE_RUTA, pendientes: leerPendientes().length, borrados: leerBorrados().length })
   };
 })();
