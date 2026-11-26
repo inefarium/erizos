@@ -19,19 +19,56 @@ import * as THREE from 'three';
   const MAX_ADORNOS = 48;
   const CLAVE_LOCAL = 'navidad_chamoys_adornos_v1';
   const CLAVE_PENDIENTES = 'navidad_chamoys_pendientes_v1';
+  const CLAVE_MUSICAS = 'navidad_chamoys_musicas_v1';
+  const CLAVE_MUSICA_SEL = 'navidad_chamoys_musica_sel_v1';
   const NUBE_BASE = 'https://calabazainefarium-default-rtdb.firebaseio.com';
   const NUBE_RUTA = 'calabaza/navidad/adornos';
+  const NUBE_RUTA_MUSICAS = 'calabaza/navidad/musicas';
   const LADO_COPO = 64;
   const RADIO_COPO = 24;
+  const NIVELES_ARBOL = 6;
+  const LOBULOS_ARBOL = 12;
+  const MUSICA_VOL = 0.32;
+  const MUSICA_MAX_BYTES = 4 * 1024 * 1024;
 
   const PALETA = {
     cian: 0x00f0ff,
+    azul: 0x3fb8ff,
+    hielo: 0xbff8ff,
     verde: 0x6bffb8,
+    verdeClaro: 0xa6ffd6,
     dorado: 0xffcf7a,
     ambar: 0xffa54d,
     rosa: 0xff5f9a,
     blanco: 0xffffff
   };
+
+  const modulosMusica = import.meta.glob('../musicas/*.{mp3,MP3,ogg,OGG,wav,WAV,m4a,M4A,aac,AAC,flac,FLAC}', {
+    eager: true,
+    query: '?url',
+    import: 'default'
+  });
+  const modulosMusicaRaiz = import.meta.glob('../../musicas/*.{mp3,MP3,ogg,OGG,wav,WAV,m4a,M4A,aac,AAC,flac,FLAC}', {
+    eager: true,
+    query: '?url',
+    import: 'default'
+  });
+  const rutasMusicaDefecto = Object.assign({}, modulosMusica, modulosMusicaRaiz);
+
+  const MUSICAS_DEFECTO = Object.keys(rutasMusicaDefecto).sort().map((ruta) => {
+    const archivo = ruta.split('/').pop() || ruta;
+    const nombre = archivo
+      .replace(/\.[^.]+$/, '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return {
+      id: 'defecto:' + archivo,
+      nombre: nombre || archivo,
+      url: rutasMusicaDefecto[ruta],
+      defecto: true
+    };
+  });
 
   const ADORNOS = [
     { tipo: 'bola', etiqueta: 'Bola carmesi', color: '#ff5f7e' },
@@ -48,7 +85,7 @@ import * as THREE from 'three';
 
   const ADORNOS_POR_TIPO = new Map(ADORNOS.map((adorno) => [adorno.tipo, adorno]));
   const TIPOS_VALIDOS = new Set(ADORNOS.map((adorno) => adorno.tipo));
-  const COLORES_NIEVE = ['#8ffcff', '#00f0ff', '#ff3ee0', '#ffcf7a', '#ffffff'];
+  const COLORES_NIEVE = ['#8ffcff', '#bff8ff', '#3fb8ff', '#6bffb8', '#ffffff'];
 
   const ICONOS = {
     bola: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 5.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8.6 13c.2-2 1.5-3.4 3.4-3.7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" opacity=".75"/></svg>',
@@ -68,7 +105,7 @@ import * as THREE from 'three';
     .navidad-overlay {
       position: fixed; inset: 0; z-index: 3; display: none; overflow: hidden;
       pointer-events: none; user-select: none; font-family: 'Courier New', monospace;
-      --nw-hielo: #8ffcff; --nw-cian: #0ff; --nw-magenta: #ff3ee0; --nw-dorado: #ffcf7a;
+      --nw-hielo: #8ffcff; --nw-cian: #0ff; --nw-magenta: #ff3ee0; --nw-dorado: #ffcf7a; --nw-verde: #6bffb8;
     }
     .navidad-overlay.activo { display: block; animation: nw-entrar .45s ease both; }
 
@@ -77,25 +114,37 @@ import * as THREE from 'three';
     .navidad-habitacion {
       position: absolute; inset: 0;
       background:
-        radial-gradient(ellipse at 74% 60%, rgba(255,170,84,.20), transparent 46%),
-        radial-gradient(ellipse at 72% 88%, rgba(255,112,36,.14), transparent 58%),
-        radial-gradient(circle at 18% 12%, rgba(104, 46, 18,.16), transparent 56%),
-        linear-gradient(180deg, #070403 0%, #0c0705 46%, #040201 100%);
+        radial-gradient(ellipse at 74% 58%, rgba(64,178,255,.20), transparent 48%),
+        radial-gradient(ellipse at 72% 92%, rgba(38,120,225,.16), transparent 60%),
+        radial-gradient(circle at 18% 12%, rgba(24,66,128,.20), transparent 58%),
+        radial-gradient(ellipse at 50% 120%, rgba(0,240,255,.08), transparent 60%),
+        linear-gradient(180deg, #020610 0%, #040c1b 46%, #010207 100%);
     }
     .navidad-habitacion::after {
       content: ""; position: absolute; inset: 0;
-      box-shadow: inset 0 0 18vmax rgba(0,0,0,.92), inset 0 0 5vmax rgba(0,0,0,.55);
+      box-shadow: inset 0 0 18vmax rgba(0,2,10,.92), inset 0 0 5vmax rgba(0,4,14,.55);
+    }
+    .navidad-habitacion::before {
+      content: ""; position: absolute; inset: 0;
+      background:
+        radial-gradient(1px 1px at 12% 22%, rgba(191,248,255,.8), transparent),
+        radial-gradient(1px 1px at 28% 68%, rgba(143,252,255,.55), transparent),
+        radial-gradient(1.5px 1.5px at 63% 18%, rgba(255,255,255,.6), transparent),
+        radial-gradient(1px 1px at 84% 36%, rgba(143,252,255,.5), transparent),
+        radial-gradient(1px 1px at 46% 82%, rgba(191,248,255,.45), transparent),
+        radial-gradient(1px 1px at 92% 74%, rgba(143,252,255,.55), transparent);
+      opacity: .55;
     }
 
     .navidad-halo {
-      position: absolute; right: -9vw; top: 50%; width: min(66vw, 64vh);
+      position: absolute; right: -9vw; top: 50%; width: min(68vw, 66vh);
       aspect-ratio: 1 / 1; transform: translateY(-50%); border-radius: 50%;
-      background: radial-gradient(circle, rgba(255,184,104,.28) 0%, rgba(255,128,52,.13) 36%, rgba(255,88,26,.04) 58%, transparent 72%);
+      background: radial-gradient(circle, rgba(126,220,255,.30) 0%, rgba(56,150,255,.15) 36%, rgba(24,86,190,.05) 58%, transparent 72%);
       animation: nw-latido 6.5s ease-in-out infinite;
     }
     .navidad-suelo {
       position: absolute; right: 0; bottom: -5vh; width: 58vw; height: 22vh;
-      background: radial-gradient(ellipse at 70% 50%, rgba(255,178,92,.22), rgba(255,110,42,.07) 46%, transparent 70%);
+      background: radial-gradient(ellipse at 70% 50%, rgba(120,215,255,.24), rgba(40,120,220,.08) 46%, transparent 70%);
     }
     @keyframes nw-latido { 0%,100% { opacity: .82; transform: translateY(-50%) scale(1); } 50% { opacity: 1; transform: translateY(-50%) scale(1.03); } }
 
@@ -103,7 +152,7 @@ import * as THREE from 'three';
 
     .navidad-escena {
       position: absolute; right: clamp(0vw, 3vw, 5vw); top: 51%;
-      width: min(36vw, 52vh); height: min(62vh, 76vw);
+      width: min(42vw, 60vh); height: min(70vh, 88vw);
       transform: translateY(-50%);
     }
     .navidad-escena::before {
@@ -120,13 +169,33 @@ import * as THREE from 'three';
     }
     .navidad-arbol-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 
-    .navidad-catalogo {
+    .navidad-catalogo, .navidad-musica {
       position: absolute; left: clamp(12px, 3vw, 52px); top: 50%; transform: translateY(-50%);
-      width: clamp(206px, 20vw, 248px); padding: 13px 13px 11px;
-      background: linear-gradient(180deg, rgba(12,7,4,.88), rgba(5,3,2,.94));
+      width: clamp(218px, 21vw, 262px); padding: 13px 13px 11px;
+      background: linear-gradient(180deg, rgba(4,10,20,.92), rgba(2,5,12,.95));
       border: 1px solid rgba(143,252,255,.30); border-radius: 10px;
-      box-shadow: 0 0 18px rgba(0,240,255,.10), inset 0 0 26px rgba(255,170,84,.05);
-      pointer-events: auto;
+      box-shadow: 0 0 20px rgba(0,180,255,.14), inset 0 0 26px rgba(80,190,255,.06);
+      display: none; pointer-events: none;
+    }
+    .navidad-catalogo.abierto, .navidad-musica.abierto {
+      display: block; pointer-events: auto; animation: nw-panel .26s ease both;
+    }
+    @keyframes nw-panel {
+      from { opacity: 0; transform: translateY(-50%) translateX(-8px); }
+      to { opacity: 1; transform: translateY(-50%) translateX(0); }
+    }
+
+    .navidad-cerrar {
+      position: absolute; top: 7px; right: 8px; width: 22px; height: 22px;
+      display: flex; align-items: center; justify-content: center;
+      appearance: none; -webkit-appearance: none; cursor: pointer;
+      color: var(--nw-hielo); background: rgba(0,0,0,.35);
+      border: 1px solid rgba(143,252,255,.24); border-radius: 5px;
+      font-family: inherit; font-size: .8rem; line-height: 1;
+      transition: color .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .navidad-cerrar:hover, .navidad-cerrar:focus-visible {
+      color: #fff; border-color: rgba(143,252,255,.6); background: rgba(0,240,255,.14); outline: none;
     }
     .navidad-cabecera h2 {
       margin: 0 0 3px; font-size: .74rem; font-weight: normal; letter-spacing: 1.7px;
@@ -172,8 +241,125 @@ import * as THREE from 'three';
 
     .navidad-ayuda {
       margin: 9px 0 0; font-size: .54rem; line-height: 1.45; letter-spacing: .2px;
-      color: rgba(255,207,122,.66);
+      color: rgba(191,248,255,.62);
     }
+
+    .navidad-muneco-hit {
+      position: absolute; left: 3%; bottom: 2%; z-index: 8;
+      width: 34%; height: 42%; padding: 0; margin: 0;
+      appearance: none; -webkit-appearance: none; background: transparent;
+      border: 1px solid transparent; border-radius: 40% 40% 26% 26%;
+      cursor: pointer; touch-action: manipulation; pointer-events: auto;
+      transition: border-color .2s ease, box-shadow .2s ease, background .2s ease;
+    }
+    .navidad-muneco-hit::after {
+      content: ""; position: absolute; left: 50%; bottom: 4%; width: 42%; height: 10%;
+      transform: translateX(-50%); border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(143,252,255,.35), transparent 70%);
+      opacity: .55; animation: nw-muneco-latido 2.6s ease-in-out infinite;
+    }
+    .navidad-muneco-hit:hover, .navidad-muneco-hit:focus-visible {
+      border-color: rgba(143,252,255,.38);
+      box-shadow: inset 0 0 34px rgba(0,200,255,.12), 0 0 22px rgba(0,200,255,.12);
+      outline: none;
+    }
+    .navidad-muneco-etiqueta {
+      position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%);
+      padding: 2px 7px; border-radius: 20px; white-space: nowrap;
+      font-size: .46rem; letter-spacing: 1px; text-transform: uppercase;
+      color: var(--nw-hielo); background: rgba(3,10,20,.78);
+      border: 1px solid rgba(143,252,255,.28); box-shadow: 0 0 12px rgba(0,200,255,.16);
+      pointer-events: none;
+    }
+    @keyframes nw-muneco-latido { 0%,100% { opacity: .4; transform: translateX(-50%) scale(.92); } 50% { opacity: .9; transform: translateX(-50%) scale(1.08); } }
+
+    .navidad-muneco-menu {
+      position: absolute; left: clamp(12px, 62vw, 72vw); bottom: clamp(58px, 20vh, 190px); z-index: 93;
+      width: min(222px, 54vw); padding: 10px;
+      background: linear-gradient(180deg, rgba(4,10,20,.96), rgba(2,5,12,.97));
+      border: 1px solid rgba(143,252,255,.36); border-radius: 10px;
+      box-shadow: 0 0 28px rgba(0,180,255,.18), inset 0 0 26px rgba(80,190,255,.06);
+      display: none; pointer-events: auto;
+      animation: nw-menu .24s ease both;
+    }
+    .navidad-muneco-menu.abierto { display: block; }
+    @keyframes nw-menu {
+      from { opacity: 0; transform: translateY(8px) scale(.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .navidad-menu-titulo {
+      margin: 0 0 8px; padding-bottom: 7px; border-bottom: 1px solid rgba(143,252,255,.18);
+      font-size: .58rem; letter-spacing: 1.4px; text-transform: uppercase;
+      color: var(--nw-hielo); text-shadow: 0 0 9px rgba(0,240,255,.5);
+    }
+    .navidad-menu-opcion {
+      appearance: none; -webkit-appearance: none; display: flex; align-items: center; gap: 8px;
+      width: 100%; margin: 0 0 6px; padding: 8px 9px; cursor: pointer;
+      font-family: inherit; font-size: .62rem; letter-spacing: .55px; text-align: left;
+      color: var(--nw-hielo); background: rgba(0,0,0,.34);
+      border: 1px solid rgba(143,252,255,.18); border-radius: 7px;
+      transition: border-color .15s ease, background .15s ease, color .15s ease;
+    }
+    .navidad-menu-opcion:last-child { margin-bottom: 0; }
+    .navidad-menu-opcion::before { content: "▸"; color: var(--nw-verde); opacity: .8; }
+    .navidad-menu-opcion:hover, .navidad-menu-opcion:focus-visible {
+      color: #fff; border-color: rgba(143,252,255,.5); background: rgba(0,240,255,.10); outline: none;
+    }
+    .navidad-menu-opcion.activa {
+      color: #fff; border-color: rgba(107,255,184,.55); background: rgba(107,255,184,.12);
+      box-shadow: 0 0 16px rgba(107,255,184,.14);
+    }
+
+    .navidad-musica-cabecera h2 {
+      margin: 0 24px 8px 0; font-size: .7rem; font-weight: normal; letter-spacing: 1.7px;
+      text-transform: uppercase; color: var(--nw-hielo); text-shadow: 0 0 9px rgba(0,240,255,.55);
+    }
+    .navidad-musica-lista { display: flex; flex-direction: column; gap: 5px; max-height: 34vh; overflow-y: auto; overscroll-behavior: contain; }
+    .navidad-pista {
+      appearance: none; -webkit-appearance: none; display: flex; align-items: center; gap: 7px;
+      width: 100%; padding: 6px 7px; cursor: pointer; text-align: left;
+      font-family: inherit; font-size: .56rem; letter-spacing: .2px; color: rgba(191,248,255,.82);
+      background: rgba(0,0,0,.34); border: 1px solid rgba(143,252,255,.14); border-radius: 6px;
+      transition: border-color .15s ease, color .15s ease, background .15s ease;
+    }
+    .navidad-pista::before { content: "♪"; flex: 0 0 auto; color: var(--nw-verde); }
+    .navidad-pista span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .navidad-pista:hover, .navidad-pista:focus-visible { color: #fff; border-color: rgba(143,252,255,.4); outline: none; }
+    .navidad-pista.activa {
+      color: #fff; border-color: rgba(107,255,184,.5); background: rgba(107,255,184,.10);
+      box-shadow: 0 0 14px rgba(107,255,184,.12);
+    }
+    .navidad-pista.activa::before { content: "▶"; }
+    .navidad-musica-vacia { margin: 4px 0; font-size: .54rem; color: rgba(191,248,255,.5); text-align: center; }
+
+    .navidad-musica-controles { display: flex; align-items: center; gap: 6px; margin-top: 9px; }
+    .navidad-musica-boton {
+      appearance: none; -webkit-appearance: none; width: 28px; height: 26px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-family: inherit; font-size: .72rem; color: var(--nw-hielo);
+      background: rgba(0,0,0,.34); border: 1px solid rgba(143,252,255,.24); border-radius: 6px;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .navidad-musica-boton:hover, .navidad-musica-boton:focus-visible {
+      border-color: rgba(143,252,255,.55); background: rgba(0,240,255,.12); outline: none;
+    }
+    .navidad-musica-vol { display: flex; align-items: center; gap: 5px; margin-left: auto; font-size: .5rem; color: rgba(191,248,255,.7); }
+    .navidad-musica-vol input { width: 58px; accent-color: #6bffb8; cursor: pointer; }
+
+    .navidad-musica-subir {
+      appearance: none; -webkit-appearance: none; display: flex; align-items: center; justify-content: center; gap: 6px;
+      width: 100%; margin-top: 8px; padding: 7px 8px; cursor: pointer;
+      font-family: inherit; font-size: .56rem; letter-spacing: .5px; text-transform: uppercase;
+      color: var(--nw-verde); background: rgba(107,255,184,.08);
+      border: 1px dashed rgba(107,255,184,.42); border-radius: 7px;
+      transition: background .15s ease, border-color .15s ease;
+    }
+    .navidad-musica-subir:hover, .navidad-musica-subir:focus-visible {
+      background: rgba(107,255,184,.15); border-color: rgba(107,255,184,.7); outline: none;
+    }
+    .navidad-musica-estado { margin: 7px 0 0; font-size: .48rem; line-height: 1.4; color: rgba(191,248,255,.55); text-align: center; }
+    .navidad-musica-estado[data-estado="error"] { color: #ff8fa8; }
+    .navidad-musica-estado[data-estado="ok"] { color: var(--nw-verde); }
 
     .navidad-aviso {
       position: absolute; left: 50%; bottom: 34px; z-index: 90; width: max-content;
@@ -203,41 +389,46 @@ import * as THREE from 'three';
     @media (max-width: 760px) {
       .navidad-escena {
         right: 50%; top: 42%; transform: translate(50%,-50%);
-        width: min(82vw, 56vh); height: min(64vh, 100vw);
+        width: min(92vw, 62vh); height: min(70vh, 112vw);
       }
-      .navidad-halo { right: 50%; top: 40%; transform: translate(50%,-50%); width: 98vw; }
+      .navidad-halo { right: 50%; top: 40%; transform: translate(50%,-50%); width: 104vw; }
       .navidad-suelo { width: 100vw; }
-      .navidad-catalogo {
+      .navidad-catalogo, .navidad-musica {
         left: 8px; right: 8px; top: auto; bottom: 8px; width: auto;
         transform: none; padding: 8px 9px 9px;
       }
-      .navidad-cabecera h2 { margin-bottom: 5px; text-align: center; }
+      .navidad-catalogo.abierto, .navidad-musica.abierto { animation: none; }
+      .navidad-cabecera h2, .navidad-musica-cabecera h2 { margin-bottom: 5px; text-align: center; }
       .navidad-cabecera p, .navidad-ayuda { display: none; }
       .navidad-nube { justify-content: center; margin: 0 0 6px; }
       .navidad-lista { grid-template-columns: repeat(5, minmax(0,1fr)); gap: 4px; }
       .navidad-chip { min-height: 46px; padding: 3px 2px; }
       .navidad-chip svg { width: 23px; height: 23px; }
       .navidad-chip span { display: none; }
+      .navidad-musica-lista { max-height: 24vh; }
+      .navidad-muneco-menu { left: 10vw; right: auto; bottom: 26vh; width: min(210px, 66vw); transform: none; }
       .navidad-aviso { bottom: 158px; }
     }
 
     @media (max-height: 560px) {
       .navidad-escena {
         right: 2vw; top: 50%; transform: translateY(-50%);
-        width: min(54vw, 60vh); height: min(88vh, 73vw);
+        width: min(58vw, 64vh); height: min(92vh, 82vw);
       }
       .navidad-halo { right: -6vw; top: 50%; transform: translateY(-50%); width: 72vw; }
-      .navidad-catalogo {
-        left: 8px; right: auto; top: 8px; bottom: 8px; width: 184px;
+      .navidad-catalogo, .navidad-musica {
+        left: 8px; right: auto; top: 8px; bottom: 8px; width: 190px;
         transform: none; overflow-y: auto; padding: 8px;
       }
-      .navidad-cabecera h2 { font-size: .66rem; }
+      .navidad-catalogo.abierto, .navidad-musica.abierto { animation: none; }
+      .navidad-cabecera h2, .navidad-musica-cabecera h2 { font-size: .66rem; }
       .navidad-cabecera p, .navidad-ayuda { display: none; }
       .navidad-nube { margin-bottom: 6px; }
       .navidad-lista { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 4px; }
       .navidad-chip { min-height: 40px; }
       .navidad-chip svg { width: 21px; height: 21px; }
       .navidad-chip span { font-size: .48rem; }
+      .navidad-muneco-menu { bottom: 10px; right: 12px; }
       .navidad-aviso { bottom: 14px; }
     }
   `;
@@ -252,8 +443,18 @@ import * as THREE from 'three';
     <canvas class="navidad-nieve"></canvas>
     <div class="navidad-escena">
       <canvas class="navidad-arbol-canvas"></canvas>
+      <button class="navidad-muneco-hit" type="button" aria-label="Abrir opciones del muneco de nieve" aria-expanded="false" title="Toca el muneco de nieve para ver las opciones">
+        <span class="navidad-muneco-etiqueta">Opciones</span>
+      </button>
+    </div>
+    <div class="navidad-muneco-menu" role="dialog" aria-label="Opciones del muneco de nieve">
+      <div class="navidad-menu-titulo">Muneco de nieve</div>
+      <button class="navidad-menu-opcion" type="button" data-panel="catalogo">Catalogo de adornos</button>
+      <button class="navidad-menu-opcion" type="button" data-panel="musica">Musica</button>
+      <button class="navidad-menu-opcion" type="button" data-panel="cerrar">Cerrar opciones</button>
     </div>
     <aside class="navidad-catalogo" aria-label="Catalogo de adornos">
+      <button class="navidad-cerrar" type="button" aria-label="Cerrar catalogo">×</button>
       <div class="navidad-cabecera">
         <h2>Catalogo de adornos</h2>
         <p>Arrastra al arbol</p>
@@ -261,6 +462,24 @@ import * as THREE from 'three';
       </div>
       <div class="navidad-lista"></div>
       <p class="navidad-ayuda">Arrastra un adorno y sueltalo sobre el arbol. La estrella solo se permite el 25 de diciembre.</p>
+    </aside>
+    <aside class="navidad-musica" aria-label="Musica de navidad">
+      <button class="navidad-cerrar" type="button" aria-label="Cerrar musica">×</button>
+      <div class="navidad-musica-cabecera">
+        <h2>Musica de navidad</h2>
+      </div>
+      <div class="navidad-musica-lista"></div>
+      <div class="navidad-musica-controles">
+        <button class="navidad-musica-boton" type="button" data-accion="play" aria-label="Reproducir o pausar">▶</button>
+        <button class="navidad-musica-boton" type="button" data-accion="prev" aria-label="Cancion anterior">⏮</button>
+        <button class="navidad-musica-boton" type="button" data-accion="next" aria-label="Cancion siguiente">⏭</button>
+        <label class="navidad-musica-vol">Vol
+          <input type="range" min="0" max="1" step="0.01" value="0.32" aria-label="Volumen de la musica">
+        </label>
+      </div>
+      <button class="navidad-musica-subir" type="button">+ Cargar musica</button>
+      <input class="navidad-musica-archivo" type="file" accept="audio/*" hidden>
+      <p class="navidad-musica-estado" data-estado="local">Las pistas se guardan en Firebase.</p>
     </aside>
     <div class="navidad-aviso" role="status" aria-live="polite"></div>
   `;
@@ -274,6 +493,14 @@ import * as THREE from 'three';
   const avisoEl = overlay.querySelector('.navidad-aviso');
   const nubeEl = overlay.querySelector('.navidad-nube');
   const nubeTextoEl = nubeEl.querySelector('span');
+  const menuEl = overlay.querySelector('.navidad-muneco-menu');
+  const munecoHitEl = overlay.querySelector('.navidad-muneco-hit');
+  const musicaEl = overlay.querySelector('.navidad-musica');
+  const listaMusicaEl = overlay.querySelector('.navidad-musica-lista');
+  const estadoMusicaEl = overlay.querySelector('.navidad-musica-estado');
+  const archivoMusicaEl = overlay.querySelector('.navidad-musica-archivo');
+  const botonSubirMusicaEl = overlay.querySelector('.navidad-musica-subir');
+  const volumenEl = overlay.querySelector('.navidad-musica-vol input');
 
   ADORNOS.forEach((adorno) => {
     const boton = document.createElement('button');
@@ -298,6 +525,7 @@ import * as THREE from 'three';
   let camara = null;
   let renderer = null;
   let grupoArbol = null;
+  let grupoMuneco = null;
   let grupoPolvo = null;
   let lucesCalidas = null;
   let materialConcha = null;
@@ -306,14 +534,25 @@ import * as THREE from 'three';
   let ultimoTiempoArbol = null;
   let ultimoTiempoNieve = null;
   let arrastre = null;
+  let ignorarMunecoHasta = 0;
   let avisoTimeout = null;
   let sincronizandoNube = false;
+  let intervaloNube = null;
 
   const adornosColocados = [];
   const adornosPorId = new Map();
   const destellos = [];
   const copos = [];
   const cacheCopos = new Map();
+
+  const musicas = MUSICAS_DEFECTO.slice();
+  let panelAbierto = null;
+  let musicaIndice = -1;
+  let cargandoMusicas = false;
+  let musicasNubeCargadas = false;
+  const audioMusica = new Audio();
+  audioMusica.preload = 'metadata';
+  audioMusica.volume = MUSICA_VOL;
 
   function leerAlmacen(clave) {
     try {
@@ -333,10 +572,326 @@ import * as THREE from 'three';
     return true;
   }
 
+  function cerrarPaneles() {
+    panelAbierto = null;
+    catalogoEl.classList.remove('abierto');
+    musicaEl.classList.remove('abierto');
+    menuEl.querySelectorAll('.navidad-menu-opcion').forEach((btn) => btn.classList.remove('activa'));
+  }
+
+  function alternarMenuMuneco() {
+    const abierto = !menuEl.classList.contains('abierto');
+    menuEl.classList.toggle('abierto', abierto);
+    munecoHitEl.setAttribute('aria-expanded', String(abierto));
+    if (!abierto) {
+      cerrarPaneles();
+    } else {
+      void sincronizarNube();
+      void cargarMusicasNube();
+    }
+  }
+
+  function seleccionarPanel(nombre) {
+    menuEl.classList.remove('abierto');
+    munecoHitEl.setAttribute('aria-expanded', 'false');
+    if (nombre === 'cerrar') {
+      cerrarPaneles();
+      return;
+    }
+    const mismo = panelAbierto === nombre;
+    panelAbierto = mismo ? null : nombre;
+    catalogoEl.classList.toggle('abierto', panelAbierto === 'catalogo');
+    musicaEl.classList.toggle('abierto', panelAbierto === 'musica');
+    menuEl.querySelectorAll('.navidad-menu-opcion').forEach((btn) => {
+      btn.classList.toggle('activa', !mismo && btn.dataset.panel === panelAbierto);
+    });
+    if (panelAbierto === 'musica' && !musicasNubeCargadas) void cargarMusicasNube();
+  }
+
+  munecoHitEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (performance.now() < ignorarMunecoHasta) return;
+    alternarMenuMuneco();
+  });
+  menuEl.querySelectorAll('.navidad-menu-opcion').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      seleccionarPanel(btn.dataset.panel);
+    });
+  });
+  overlay.querySelectorAll('.navidad-cerrar').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cerrarPaneles();
+    });
+  });
+
+  function estadoMusica(texto, estado) {
+    estadoMusicaEl.textContent = texto;
+    estadoMusicaEl.dataset.estado = estado || 'local';
+  }
+
+  function guardarMusicasLocal() {
+    const subidas = musicas.filter((pista) => !pista.defecto).map((pista) => ({
+      id: pista.id,
+      nombre: pista.nombre,
+      data: pista.data,
+      creado: pista.creado,
+      tamano: pista.tamano
+    }));
+    if (!subidas.length) escribirAlmacen(CLAVE_MUSICAS, null);
+    else escribirAlmacen(CLAVE_MUSICAS, JSON.stringify(subidas));
+  }
+
+  function leerMusicasLocal() {
+    let datos = [];
+    try {
+      datos = JSON.parse(leerAlmacen(CLAVE_MUSICAS) || '[]');
+    } catch (error) {
+      datos = [];
+    }
+    if (!Array.isArray(datos)) return;
+    datos.forEach((valor) => {
+      if (!valor || typeof valor.data !== 'string') return;
+      if (!valor.data.startsWith('data:audio') && !/^https?:/i.test(valor.data)) return;
+      const id = typeof valor.id === 'string' && valor.id ? valor.id : nuevoId();
+      if (musicas.some((pista) => pista.id === id)) return;
+      musicas.push({
+        id: id,
+        nombre: String(valor.nombre || 'Musica').slice(0, 80),
+        data: valor.data,
+        creado: typeof valor.creado === 'string' ? valor.creado : new Date().toISOString(),
+        tamano: Number(valor.tamano) || 0,
+        subida: true
+      });
+    });
+  }
+
+  function actualizarBotonMusica() {
+    const boton = musicaEl.querySelector('[data-accion="play"]');
+    if (!boton) return;
+    boton.textContent = !audioMusica.paused && musicaIndice >= 0 ? '❚❚' : '▶';
+  }
+
+  function renderizarMusicas() {
+    listaMusicaEl.innerHTML = '';
+    if (!musicas.length) {
+      const vacio = document.createElement('p');
+      vacio.className = 'navidad-musica-vacia';
+      vacio.textContent = 'Aun no hay pistas. Carga una o agrega archivos en la carpeta musicas.';
+      listaMusicaEl.appendChild(vacio);
+      actualizarBotonMusica();
+      return;
+    }
+    musicas.forEach((pista, indice) => {
+      const boton = document.createElement('button');
+      boton.type = 'button';
+      boton.className = 'navidad-pista' + (indice === musicaIndice ? ' activa' : '');
+      boton.title = pista.defecto ? 'Pista incluida en el proyecto' : 'Pista cargada y guardada en Firebase';
+      const texto = document.createElement('span');
+      texto.textContent = pista.nombre || 'Musica';
+      boton.appendChild(texto);
+      boton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (indice === musicaIndice && !audioMusica.paused) {
+          audioMusica.pause();
+          actualizarBotonMusica();
+          return;
+        }
+        if (indice === musicaIndice) {
+          void reproducirAudio();
+          return;
+        }
+        reproducirMusica(indice);
+      });
+      listaMusicaEl.appendChild(boton);
+    });
+    actualizarBotonMusica();
+  }
+
+  async function reproducirAudio() {
+    if (!musicas.length) return;
+    if (musicaIndice < 0 || musicaIndice >= musicas.length) musicaIndice = 0;
+    audioMusica.volume = Number(volumenEl.value) || MUSICA_VOL;
+    try {
+      await audioMusica.play();
+      estadoMusica('Reproduciendo ' + musicas[musicaIndice].nombre, 'ok');
+    } catch (error) {
+      estadoMusica('Toca de nuevo para permitir el audio.', 'error');
+    }
+    actualizarBotonMusica();
+  }
+
+  function reproducirMusica(indice) {
+    if (!musicas.length) return;
+    const n = musicas.length;
+    musicaIndice = ((indice % n) + n) % n;
+    audioMusica.src = musicas[musicaIndice].data || musicas[musicaIndice].url;
+    try { audioMusica.currentTime = 0; } catch (error) { /* ignorar */ }
+    escribirAlmacen(CLAVE_MUSICA_SEL, String(musicaIndice));
+    renderizarMusicas();
+    void reproducirAudio();
+  }
+
+  function pistaSiguiente(delta) {
+    if (!musicas.length) return;
+    if (musicaIndice < 0) reproducirMusica(0);
+    else reproducirMusica(musicaIndice + delta);
+  }
+
+  async function enviarMusica(pista) {
+    estadoMusica('Guardando musica en Firebase...', 'guardando');
+    try {
+      const respuesta = await pedirNubeMusicas(pista.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: pista.id,
+          nombre: pista.nombre,
+          data: pista.data,
+          creado: pista.creado,
+          tamano: pista.tamano
+        })
+      });
+      if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
+      estadoMusica('Musica guardada en Firebase.', 'ok');
+      return true;
+    } catch (error) {
+      estadoMusica('No se pudo subir. Quedo guardada en este dispositivo.', 'error');
+      return false;
+    }
+  }
+
+  async function cargarMusicasNube() {
+    if (cargandoMusicas || musicasNubeCargadas) return;
+    cargandoMusicas = true;
+    estadoMusica('Buscando musicas en Firebase...', 'guardando');
+    try {
+      if (musicas.every((pista) => pista.defecto)) {
+        leerMusicasLocal();
+        renderizarMusicas();
+      }
+      const respuesta = await pedirNubeMusicas('', { headers: { Accept: 'application/json' } });
+      if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
+      const datos = await respuesta.json();
+      let lista = [];
+      if (Array.isArray(datos)) lista = datos;
+      else if (datos && typeof datos === 'object') lista = Object.keys(datos).map((id) => Object.assign({ id: id }, datos[id]));
+      let agregadas = 0;
+      lista.forEach((valor) => {
+        if (!valor || typeof valor.data !== 'string') return;
+        if (!valor.data.startsWith('data:audio') && !/^https?:/i.test(valor.data)) return;
+        const id = String(valor.id || '').trim() || nuevoId();
+        if (musicas.some((pista) => pista.id === id)) return;
+        musicas.push({
+          id: id,
+          nombre: String(valor.nombre || 'Musica').slice(0, 80),
+          data: valor.data,
+          creado: typeof valor.creado === 'string' ? valor.creado : new Date().toISOString(),
+          tamano: Number(valor.tamano) || 0,
+          subida: true
+        });
+        agregadas++;
+      });
+      musicasNubeCargadas = true;
+      if (agregadas) {
+        guardarMusicasLocal();
+        renderizarMusicas();
+        estadoMusica(agregadas + ' pista(s) recuperada(s) de Firebase.', 'ok');
+      } else {
+        estadoMusica('Musicas sincronizadas con Firebase.', 'ok');
+      }
+    } catch (error) {
+      estadoMusica('Sin conexion. Se usan las pistas locales.', 'error');
+    } finally {
+      cargandoMusicas = false;
+    }
+  }
+
+  function cargarArchivoMusica(archivo) {
+    if (!archivo) return;
+    if (!archivo.type.startsWith('audio/')) {
+      estadoMusica('El archivo debe ser de audio.', 'error');
+      return;
+    }
+    if (archivo.size > MUSICA_MAX_BYTES) {
+      estadoMusica('Maximo ' + Math.round(MUSICA_MAX_BYTES / (1024 * 1024)) + ' MB por cancion.', 'error');
+      return;
+    }
+    estadoMusica('Leyendo ' + archivo.name + '...', 'guardando');
+    const lector = new FileReader();
+    lector.onerror = () => estadoMusica('No se pudo leer el archivo.', 'error');
+    lector.onload = () => {
+      const data = String(lector.result || '');
+      if (!data.startsWith('data:audio')) {
+        estadoMusica('Formato de audio no reconocido.', 'error');
+        return;
+      }
+      const pista = {
+        id: nuevoId(),
+        nombre: archivo.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').slice(0, 80) || 'Musica',
+        data: data,
+        creado: new Date().toISOString(),
+        tamano: archivo.size,
+        subida: true
+      };
+      musicas.push(pista);
+      guardarMusicasLocal();
+      renderizarMusicas();
+      void enviarMusica(pista);
+    };
+    lector.readAsDataURL(archivo);
+  }
+
+  botonSubirMusicaEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    archivoMusicaEl.click();
+  });
+  archivoMusicaEl.addEventListener('change', (e) => {
+    const archivo = e.target.files && e.target.files[0];
+    archivoMusicaEl.value = '';
+    if (archivo) cargarArchivoMusica(archivo);
+  });
+  musicaEl.querySelectorAll('.navidad-musica-boton').forEach((boton) => {
+    boton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const accion = boton.dataset.accion;
+      if (accion === 'play') {
+        if (!musicas.length) return;
+        if (musicaIndice < 0) reproducirMusica(0);
+        else if (audioMusica.paused) void reproducirAudio();
+        else audioMusica.pause();
+        actualizarBotonMusica();
+      } else if (accion === 'next') {
+        pistaSiguiente(1);
+      } else if (accion === 'prev') {
+        pistaSiguiente(-1);
+      }
+    });
+  });
+  volumenEl.addEventListener('input', () => {
+    audioMusica.volume = Number(volumenEl.value);
+  });
+  audioMusica.addEventListener('ended', () => pistaSiguiente(1));
+  audioMusica.addEventListener('play', actualizarBotonMusica);
+  audioMusica.addEventListener('pause', actualizarBotonMusica);
+
   const azar = (min, max) => min + Math.random() * (max - min);
   const limitar = (v, min, max) => Math.min(Math.max(v, min), max);
   const radioEn = (t) => RADIO_BASE * Math.pow(1 - limitar(t, 0, 1), 1.1) + 0.015;
   const alturaEn = (t) => BASE_Y + limitar(t, 0, 1) * ALTO_ARBOL;
+
+  function radioCapa(t, ang) {
+    const seguro = limitar(t, 0, 0.9999);
+    const base = radioEn(seguro);
+    const nivel = seguro * NIVELES_ARBOL;
+    const indice = Math.floor(nivel);
+    const dentro = nivel - indice;
+    const falda = 1 + 0.26 * Math.pow(1 - dentro, 1.35);
+    const lobulo = (0.05 + 0.04 * (1 - dentro)) * Math.sin(ang * LOBULOS_ARBOL + indice * 1.9);
+    const ondulado = 0.014 * Math.sin(ang * LOBULOS_ARBOL * 2 - seguro * 26);
+    return base * Math.max(0.02, falda + lobulo + ondulado);
+  }
 
   function easeOutBack(p) {
     const c1 = 1.70158;
@@ -351,6 +906,8 @@ import * as THREE from 'three';
   function puntoSobreArbol(x, y) {
     if (!puntoEnRect(x, y, escenaEl.getBoundingClientRect())) return false;
     if (puntoEnRect(x, y, catalogoEl.getBoundingClientRect())) return false;
+    if (puntoEnRect(x, y, musicaEl.getBoundingClientRect())) return false;
+    if (puntoEnRect(x, y, menuEl.getBoundingClientRect())) return false;
     const menu = window.OpcionesTemas.contenedorMenu;
     if (menu && puntoEnRect(x, y, menu.getBoundingClientRect())) return false;
     return true;
@@ -524,29 +1081,30 @@ import * as THREE from 'three';
     const posiciones = [];
     const colores = [];
     const cian = new THREE.Color(PALETA.cian);
+    const azul = new THREE.Color(PALETA.azul);
+    const hielo = new THREE.Color(PALETA.hielo);
     const verde = new THREE.Color(PALETA.verde);
-    const dorado = new THREE.Color(PALETA.dorado);
+    const verdeClaro = new THREE.Color(PALETA.verdeClaro);
 
     function segmento(ax, ay, az, bx, by, bz, color) {
       posiciones.push(ax, ay, az, bx, by, bz);
       colores.push(color.r, color.g, color.b, color.r, color.g, color.b);
     }
 
-    const anillos = 24;
-    const segmentos = 60;
+    const anillos = 46;
+    const segmentos = 120;
     for (let i = 0; i < anillos; i++) {
       const t = i / (anillos - 1);
-      const radio = radioEn(t);
-      const y = alturaEn(t);
-      const color = i % 6 === 0 ? dorado : (i % 3 === 0 ? cian : verde);
+      const y = alturaEn(t) + Math.sin(t * 14) * 0.006;
+      const color = i % 7 === 0 ? verdeClaro : (i % 4 === 0 ? verde : (i % 3 === 0 ? hielo : cian));
       const puntos = [];
       for (let j = 0; j < segmentos; j++) {
         const ang = (j / segmentos) * TAU;
-        const onda = Math.sin(ang * 5 + t * 11) * 0.011;
+        const radio = radioCapa(t, ang);
         puntos.push([
-          Math.cos(ang) * (radio + onda),
-          y + Math.sin(ang * 3 + t * 9) * 0.01,
-          Math.sin(ang) * (radio + onda)
+          Math.cos(ang) * radio,
+          y + Math.sin(ang * 3 + t * 17) * 0.008,
+          Math.sin(ang) * radio
         ]);
       }
       for (let j = 0; j < segmentos; j++) {
@@ -556,48 +1114,72 @@ import * as THREE from 'three';
       }
     }
 
-    for (let s = 0; s < 4; s++) {
-      const pasos = 230;
-      const color = s % 2 === 0 ? dorado : cian;
+    for (let s = 0; s < 18; s++) {
+      const pasos = 220;
+      const angBase = (s / 18) * TAU;
+      const color = s % 3 === 0 ? verde : (s % 2 === 0 ? hielo : cian);
       let anterior = null;
       for (let i = 0; i <= pasos; i++) {
         const t = i / pasos;
-        const ang = t * TAU * 3.25 + (s * TAU) / 4;
-        const radio = radioEn(t) + 0.008;
+        const ang = angBase + Math.sin(t * Math.PI * 2 + s * 0.7) * 0.06 + t * 0.42;
+        const radio = radioCapa(t, ang) + 0.004;
         const punto = [Math.cos(ang) * radio, alturaEn(t), Math.sin(ang) * radio];
         if (anterior) segmento(anterior[0], anterior[1], anterior[2], punto[0], punto[1], punto[2], color);
         anterior = punto;
       }
     }
 
-    for (let b = 0; b < 18; b++) {
-      const angBase = (b / 18) * TAU;
-      const pasos = 20;
-      const color = b % 4 === 0 ? dorado : cian;
+    for (let nivel = 1; nivel < NIVELES_ARBOL; nivel++) {
+      const t = nivel / NIVELES_ARBOL + 0.003;
+      const pasos = LOBULOS_ARBOL * 8;
+      const color = nivel % 2 === 0 ? verdeClaro : hielo;
       let anterior = null;
-      for (let i = 0; i <= pasos; i++) {
-        const t = 0.10 + (i / pasos) * 0.85;
-        const ang = angBase + t * 0.72;
-        const radio = radioEn(t) + 0.006;
-        const punto = [Math.cos(ang) * radio, alturaEn(t), Math.sin(ang) * radio];
+      for (let j = 0; j <= pasos; j++) {
+        const ang = (j / pasos) * TAU;
+        const radio = radioCapa(t, ang) + 0.012;
+        const punto = [Math.cos(ang) * radio, alturaEn(t) - 0.022, Math.sin(ang) * radio];
         if (anterior) segmento(anterior[0], anterior[1], anterior[2], punto[0], punto[1], punto[2], color);
         anterior = punto;
       }
     }
 
-    for (let i = 0; i < 120; i++) {
-      const t = azar(0.05, 0.96);
+    for (let nivel = 0; nivel < NIVELES_ARBOL; nivel++) {
+      const tAlto = nivel / NIVELES_ARBOL;
+      const tBajo = (nivel + 1) / NIVELES_ARBOL;
+      const color = nivel % 2 === 0 ? verde : cian;
+      for (let lobulo = 0; lobulo < LOBULOS_ARBOL; lobulo++) {
+        const angBase = (lobulo / LOBULOS_ARBOL) * TAU + nivel * 0.31;
+        let anterior = null;
+        for (let i = 0; i <= 9; i++) {
+          const p = i / 9;
+          const t = tAlto + (tBajo - tAlto) * p * 0.94;
+          const ang = angBase + p * 0.24;
+          const radio = radioCapa(t, ang) + 0.018 + p * p * 0.065;
+          const punto = [
+            Math.cos(ang) * radio,
+            alturaEn(t) - p * p * 0.045,
+            Math.sin(ang) * radio
+          ];
+          if (anterior) segmento(anterior[0], anterior[1], anterior[2], punto[0], punto[1], punto[2], color);
+          anterior = punto;
+        }
+      }
+    }
+
+    for (let i = 0; i < 460; i++) {
+      const t = azar(0.04, 0.96);
       const ang = azar(0, TAU);
-      const radio = radioEn(t);
+      const radio = radioCapa(t, ang);
       const x = Math.cos(ang) * radio;
       const y = alturaEn(t);
       const z = Math.sin(ang) * radio;
-      const largo = azar(0.022, 0.072);
-      const inclinacion = azar(-0.04, 0.05);
+      const largo = azar(0.024, 0.078);
+      const caida = azar(-0.055, -0.008);
+      const color = i % 7 === 0 ? verdeClaro : (i % 3 === 0 ? verde : (i % 2 === 0 ? hielo : azul));
       segmento(
         x, y, z,
-        Math.cos(ang) * (radio + largo), y + inclinacion, Math.sin(ang) * (radio + largo),
-        i % 5 === 0 ? dorado : (i % 2 === 0 ? verde : cian)
+        Math.cos(ang) * (radio + largo), y + caida, Math.sin(ang) * (radio + largo),
+        color
       );
     }
 
@@ -608,18 +1190,22 @@ import * as THREE from 'three';
   }
 
   function crearConcha() {
-    const filas = 30;
-    const segmentos = 72;
+    const filas = 96;
+    const segmentos = 144;
     const posiciones = [];
     const indices = [];
 
     for (let i = 0; i <= filas; i++) {
       const t = i / filas;
-      const radio = Math.max(radioEn(t) * 0.955, 0.002);
       const y = alturaEn(t);
       for (let j = 0; j < segmentos; j++) {
         const ang = (j / segmentos) * TAU;
-        posiciones.push(Math.cos(ang) * radio, y, Math.sin(ang) * radio);
+        const radio = Math.max(radioCapa(t, ang) * 0.965, 0.002);
+        posiciones.push(
+          Math.cos(ang) * radio,
+          y + Math.sin(ang * 4 + t * 18) * 0.006,
+          Math.sin(ang) * radio
+        );
       }
     }
 
@@ -647,8 +1233,8 @@ import * as THREE from 'three';
     const geometriaLineas = crearGeometriaLineas();
     const planoFrente = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
     const planoFondo = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0);
-    const lineasFondo = new THREE.LineSegments(geometriaLineas, materialHolograma(0.10, planoFondo));
-    const lineasFrente = new THREE.LineSegments(geometriaLineas, materialHolograma(0.78, planoFrente));
+    const lineasFondo = new THREE.LineSegments(geometriaLineas, materialHolograma(0.12, planoFondo));
+    const lineasFrente = new THREE.LineSegments(geometriaLineas, materialHolograma(0.90, planoFrente));
     lineasFondo.renderOrder = 1;
     lineasFrente.renderOrder = 4;
     grupo.add(lineasFondo, lineasFrente);
@@ -676,12 +1262,14 @@ import * as THREE from 'three';
         varying float vAltura;
         void main() {
           float fresnel = pow(1.0 - abs(dot(normalize(vNormalVista), normalize(vVista))), 2.1);
-          vec3 abajo = vec3(0.025, 0.205, 0.145);
-          vec3 arriba = vec3(0.055, 0.480, 0.405);
+          vec3 abajo = vec3(0.020, 0.105, 0.185);
+          vec3 arriba = vec3(0.055, 0.400, 0.510);
+          vec3 verde = vec3(0.120, 0.520, 0.380);
           vec3 color = mix(abajo, arriba, vAltura);
-          float lineas = sin(vAltura * 62.0 - uTiempo * 0.8) * 0.018;
-          float brillo = 0.095 + fresnel * 0.52 + lineas;
-          gl_FragColor = vec4(color + brillo, 0.34 + fresnel * 0.25);
+          color = mix(color, verde, 0.16 + 0.08 * sin(vAltura * 18.0 + uTiempo * 0.5));
+          float lineas = sin(vAltura * 62.0 - uTiempo * 0.8) * 0.022;
+          float brillo = 0.090 + fresnel * 0.54 + lineas;
+          gl_FragColor = vec4(color + brillo, 0.32 + fresnel * 0.26);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
         }
@@ -698,41 +1286,41 @@ import * as THREE from 'three';
 
     const tronco = new THREE.Mesh(
       new THREE.CylinderGeometry(0.032, 0.055, 0.44, 12, 1, false),
-      new THREE.MeshStandardMaterial({ color: 0x3a2114, roughness: 0.82, metalness: 0.05 })
+      new THREE.MeshStandardMaterial({ color: 0x1d4a63, roughness: 0.78, metalness: 0.12, emissive: 0x0a2436, emissiveIntensity: 0.6 })
     );
     tronco.position.y = BASE_Y - 0.20;
     grupo.add(tronco);
 
-    const materialAroAmbar = new THREE.MeshBasicMaterial({
-      color: PALETA.ambar, transparent: true, opacity: 0.44,
+    const materialAroHielo = new THREE.MeshBasicMaterial({
+      color: PALETA.hielo, transparent: true, opacity: 0.46,
       blending: THREE.AdditiveBlending, depthWrite: false
     });
-    const materialAroCian = new THREE.MeshBasicMaterial({
-      color: PALETA.cian, transparent: true, opacity: 0.28,
+    const materialAroVerde = new THREE.MeshBasicMaterial({
+      color: PALETA.verde, transparent: true, opacity: 0.30,
       blending: THREE.AdditiveBlending, depthWrite: false
     });
-    const aroAmbar = new THREE.Mesh(new THREE.TorusGeometry(1.08, 0.011, 6, 96), materialAroAmbar);
-    aroAmbar.rotation.x = Math.PI / 2;
-    aroAmbar.position.y = BASE_Y - 0.08;
-    aroAmbar.renderOrder = 5;
-    const aroCian = new THREE.Mesh(new THREE.TorusGeometry(1.22, 0.007, 6, 96), materialAroCian);
-    aroCian.rotation.x = Math.PI / 2;
-    aroCian.position.y = BASE_Y - 0.08;
-    aroCian.renderOrder = 5;
-    grupo.add(aroAmbar, aroCian);
+    const aroHielo = new THREE.Mesh(new THREE.TorusGeometry(1.14, 0.011, 6, 96), materialAroHielo);
+    aroHielo.rotation.x = Math.PI / 2;
+    aroHielo.position.y = BASE_Y - 0.08;
+    aroHielo.renderOrder = 5;
+    const aroVerde = new THREE.Mesh(new THREE.TorusGeometry(1.28, 0.007, 6, 96), materialAroVerde);
+    aroVerde.rotation.x = Math.PI / 2;
+    aroVerde.position.y = BASE_Y - 0.08;
+    aroVerde.renderOrder = 5;
+    grupo.add(aroHielo, aroVerde);
 
     const posicionesLuces = [];
-    for (let i = 0; i < 108; i++) {
-      const t = 0.035 + (i / 108) * 0.94;
+    for (let i = 0; i < 150; i++) {
+      const t = 0.035 + (i / 150) * 0.94;
       const ang = t * TAU * 4.4;
-      const radio = radioEn(t) + 0.024;
+      const radio = radioCapa(t, ang) + 0.022;
       posicionesLuces.push(Math.cos(ang) * radio, alturaEn(t), Math.sin(ang) * radio);
     }
     const geoLuces = new THREE.BufferGeometry();
     geoLuces.setAttribute('position', new THREE.Float32BufferAttribute(posicionesLuces, 3));
     lucesCalidas = new THREE.Points(geoLuces, new THREE.PointsMaterial({
-      color: PALETA.dorado, map: texturaPunto, size: 0.07, sizeAttenuation: true,
-      transparent: true, opacity: 0.82, blending: THREE.AdditiveBlending,
+      color: PALETA.hielo, map: texturaPunto, size: 0.062, sizeAttenuation: true,
+      transparent: true, opacity: 0.88, blending: THREE.AdditiveBlending,
       depthWrite: false, alphaTest: 0.02
     }));
     lucesCalidas.renderOrder = 6;
@@ -745,7 +1333,7 @@ import * as THREE from 'three';
     const cantidad = 100;
     const posiciones = [];
     const colores = [];
-    const paleta = [new THREE.Color(PALETA.dorado), new THREE.Color(PALETA.ambar), new THREE.Color(PALETA.cian)];
+    const paleta = [new THREE.Color(PALETA.hielo), new THREE.Color(PALETA.cian), new THREE.Color(PALETA.verde), new THREE.Color(PALETA.azul)];
     for (let i = 0; i < cantidad; i++) {
       const t = Math.random();
       const ang = Math.random() * TAU;
@@ -762,6 +1350,139 @@ import * as THREE from 'three';
       transparent: true, opacity: 0.48, blending: THREE.AdditiveBlending,
       depthWrite: false, alphaTest: 0.02
     }));
+  }
+
+  function crearLineasMalla(geometria, colorHex, opacidad) {
+    const lineas = new THREE.WireframeGeometry(geometria);
+    const material = new THREE.LineBasicMaterial({
+      color: colorHex,
+      transparent: true,
+      opacity: opacidad,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    return new THREE.LineSegments(lineas, material);
+  }
+
+  function construirMunecoNieve() {
+    const grupo = new THREE.Group();
+    grupo.name = 'muneco-nieve';
+
+    const materialNieve = new THREE.MeshStandardMaterial({
+      color: 0xf4feff,
+      emissive: 0x4fb6e8,
+      emissiveIntensity: 0.32,
+      roughness: 0.58,
+      metalness: 0.04,
+      transparent: true,
+      opacity: 0.95
+    });
+    const materialCarbon = new THREE.MeshStandardMaterial({
+      color: 0x0a1622,
+      emissive: 0x001a33,
+      emissiveIntensity: 0.45,
+      roughness: 0.9,
+      metalness: 0.12
+    });
+    const materialZanahoria = new THREE.MeshStandardMaterial({
+      color: 0xff9a3c,
+      emissive: 0x8a3200,
+      emissiveIntensity: 0.5,
+      roughness: 0.45,
+      metalness: 0.08
+    });
+    const materialBufanda = new THREE.MeshStandardMaterial({
+      color: 0x36d9a8,
+      emissive: 0x0a6b52,
+      emissiveIntensity: 0.45,
+      roughness: 0.5,
+      metalness: 0.06
+    });
+    const materialSombrero = new THREE.MeshStandardMaterial({
+      color: 0x123a5c,
+      emissive: 0x0a2cff,
+      emissiveIntensity: 0.28,
+      roughness: 0.6,
+      metalness: 0.18
+    });
+
+    function bola(radio, y) {
+      const geo = new THREE.SphereGeometry(radio, 22, 16);
+      const malla = new THREE.Mesh(geo, materialNieve);
+      malla.position.y = y;
+      malla.add(crearLineasMalla(geo, 0xdffbff, 0.45));
+      return malla;
+    }
+
+    grupo.add(bola(0.30, 0.30));
+    grupo.add(bola(0.23, 0.61));
+    grupo.add(bola(0.17, 0.87));
+
+    [-0.058, 0.058].forEach((x) => {
+      const ojo = new THREE.Mesh(new THREE.SphereGeometry(0.020, 10, 8), materialCarbon);
+      ojo.position.set(x, 0.915, 0.150);
+      grupo.add(ojo);
+    });
+
+    for (let i = 0; i < 5; i++) {
+      const ang = -0.85 + (i / 4) * 1.7;
+      const sonrisa = new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), materialCarbon);
+      sonrisa.position.set(Math.sin(ang) * 0.082, 0.825 - Math.cos(ang) * 0.052, 0.158);
+      grupo.add(sonrisa);
+    }
+
+    const nariz = new THREE.Mesh(new THREE.ConeGeometry(0.038, 0.15, 12), materialZanahoria);
+    nariz.rotation.x = Math.PI / 2;
+    nariz.position.set(0, 0.875, 0.205);
+    grupo.add(nariz);
+
+    [0.53, 0.63, 0.73].forEach((y) => {
+      const boton = new THREE.Mesh(new THREE.SphereGeometry(0.023, 10, 8), materialCarbon);
+      boton.position.set(0, y, 0.205);
+      grupo.add(boton);
+    });
+
+    const bufanda = new THREE.Mesh(new THREE.TorusGeometry(0.168, 0.038, 9, 28), materialBufanda);
+    bufanda.rotation.x = Math.PI / 2;
+    bufanda.position.y = 0.748;
+    grupo.add(bufanda);
+    const colaBufanda = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.22, 0.035), materialBufanda);
+    colaBufanda.position.set(0.13, 0.655, 0.135);
+    colaBufanda.rotation.z = -0.22;
+    colaBufanda.rotation.x = 0.18;
+    grupo.add(colaBufanda);
+
+    const ala = new THREE.Mesh(new THREE.CylinderGeometry(0.205, 0.205, 0.028, 24), materialSombrero);
+    ala.position.y = 1.022;
+    grupo.add(ala);
+    const copa = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.15, 0.16, 22), materialSombrero);
+    copa.position.y = 1.113;
+    grupo.add(copa);
+    const cinta = new THREE.Mesh(new THREE.TorusGeometry(0.148, 0.018, 6, 24), materialBufanda);
+    cinta.rotation.x = Math.PI / 2;
+    cinta.position.y = 1.038;
+    grupo.add(cinta);
+
+    const brazoGeo = new THREE.CylinderGeometry(0.012, 0.010, 0.34, 7);
+    [-1, 1].forEach((lado) => {
+      const brazo = new THREE.Mesh(brazoGeo, materialNieve);
+      brazo.position.set(lado * 0.245, 0.67, 0.01);
+      brazo.rotation.z = lado * -1.02;
+      brazo.rotation.y = lado * 0.28;
+      grupo.add(brazo);
+      const rama = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.007, 0.13, 5), materialNieve);
+      rama.position.set(lado * 0.34, 0.735, 0.02);
+      rama.rotation.z = lado * -0.42;
+      grupo.add(rama);
+      const rama2 = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.006, 0.11, 5), materialNieve);
+      rama2.position.set(lado * 0.35, 0.62, 0.02);
+      rama2.rotation.z = lado * -1.55;
+      grupo.add(rama2);
+    });
+
+    grupo.position.set(-0.72, BASE_Y - 0.10, 1.05);
+    grupo.scale.setScalar(0.82);
+    return grupo;
   }
 
   function crearEscena3D() {
@@ -782,19 +1503,25 @@ import * as THREE from 'three';
       renderer.toneMappingExposure = 1.08;
       if ('outputColorSpace' in renderer) renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-      escena.add(new THREE.AmbientLight(0xffd5b0, 1.15));
-      const luzPrincipal = new THREE.DirectionalLight(0xffb070, 2.5);
+      escena.add(new THREE.AmbientLight(0x9fdcff, 1.25));
+      const luzPrincipal = new THREE.DirectionalLight(0x9fd4ff, 2.6);
       luzPrincipal.position.set(3, 4, 5);
       escena.add(luzPrincipal);
-      const luzRim = new THREE.PointLight(0x62fff0, 10, 9, 2);
+      const luzFria = new THREE.DirectionalLight(0x7dffcf, 0.75);
+      luzFria.position.set(-3, 1.5, 4);
+      escena.add(luzFria);
+      const luzRim = new THREE.PointLight(0x62fff0, 12, 10, 2);
       luzRim.position.set(-2.1, 1.3, -2.2);
       escena.add(luzRim);
-      const luzRosa = new THREE.PointLight(0xff5ac8, 7, 8, 2);
-      luzRosa.position.set(2.2, -0.3, -2.5);
-      escena.add(luzRosa);
+      const luzAzul = new THREE.PointLight(0x3f7bff, 8, 9, 2);
+      luzAzul.position.set(2.2, -0.3, -2.5);
+      escena.add(luzAzul);
 
       grupoArbol = construirArbol();
       escena.add(grupoArbol);
+
+      grupoMuneco = construirMunecoNieve();
+      escena.add(grupoMuneco);
 
       grupoPolvo = construirPolvo();
       escena.add(grupoPolvo);
@@ -1233,10 +1960,12 @@ import * as THREE from 'three';
       const nx = limitar((clientX - rect.left) / rect.width, 0, 1);
       const ny = limitar((clientY - rect.top) / rect.height, 0, 1);
       const t = limitar(1 - (ny - 0.08) / 0.84, 0.07, 0.94) + azar(-0.018, 0.018);
-      const radio = radioEn(t);
       const haciaCamara = Math.cos(grupoArbol.rotation.y) >= 0 ? 1 : -1;
-      xDeseado = limitar((nx - 0.5) * 2.05, -1, 1) * radio * 0.96;
-      z = Math.sqrt(Math.max(radio * radio - xDeseado * xDeseado, 0.0004)) * haciaCamara;
+      const fraccion = limitar((nx - 0.5) * 2.05, -1, 1) * 0.96;
+      const ang = Math.asin(limitar(fraccion, -0.99, 0.99));
+      const radio = radioCapa(t, ang);
+      xDeseado = Math.sin(ang) * radio;
+      z = Math.cos(ang) * radio * haciaCamara;
       y = alturaEn(t);
       rotY = Math.atan2(xDeseado, z) + azar(-0.35, 0.35);
       escalaBase = azar(1.12, 1.3);
@@ -1317,6 +2046,11 @@ import * as THREE from 'three';
 
     if (!escenaLista) return;
     grupoArbol.rotation.y += dt * VELOCIDAD_GIRO;
+    if (grupoMuneco) {
+      grupoMuneco.rotation.z = Math.sin(ahora * 0.0011) * 0.082;
+      grupoMuneco.rotation.x = Math.sin(ahora * 0.0007 + 1.2) * 0.018;
+      grupoMuneco.position.y = BASE_Y - 0.10 + Math.sin(ahora * 0.0016) * 0.008;
+    }
     if (grupoPolvo) {
       grupoPolvo.rotation.y -= dt * 0.022;
       grupoPolvo.position.y = Math.sin(ahora * 0.0004) * 0.03;
@@ -1386,6 +2120,7 @@ import * as THREE from 'three';
     quitarEscuchasArrastre();
     escenaEl.classList.remove('sobre');
     arrastre = null;
+    ignorarMunecoHasta = performance.now() + 320;
 
     if (dentro && escenaLista) {
       const colocado = colocarAdorno(tipo, color, x, y);
@@ -1443,6 +2178,7 @@ import * as THREE from 'three';
     const fantasma = arrastre.fantasma;
     const boton = arrastre.boton;
     arrastre = null;
+    ignorarMunecoHasta = performance.now() + 320;
     devolverAlCatalogo(fantasma, boton);
   }
 
@@ -1450,16 +2186,28 @@ import * as THREE from 'three';
     return NUBE_BASE + '/' + NUBE_RUTA + (id ? '/' + encodeURIComponent(id) : '') + '.json';
   }
 
-  async function pedirNube(id, opciones = {}) {
+  function urlNubeMusicas(id) {
+    return NUBE_BASE + '/' + NUBE_RUTA_MUSICAS + (id ? '/' + encodeURIComponent(id) : '') + '.json';
+  }
+
+  async function pedirConTiempo(url, opciones = {}) {
     const control = new AbortController();
     const temporizador = setTimeout(() => control.abort(), 6500);
     const esLectura = !opciones.method || opciones.method === 'GET';
-    const url = urlNube(id) + (esLectura ? '?_=' + Date.now() : '');
+    const destino = url + (esLectura ? '?_=' + Date.now() : '');
     try {
-      return await fetch(url, Object.assign({ cache: 'no-store' }, opciones, { signal: control.signal }));
+      return await fetch(destino, Object.assign({ cache: 'no-store' }, opciones, { signal: control.signal }));
     } finally {
       clearTimeout(temporizador);
     }
+  }
+
+  async function pedirNube(id, opciones = {}) {
+    return pedirConTiempo(urlNube(id), opciones);
+  }
+
+  async function pedirNubeMusicas(id, opciones = {}) {
+    return pedirConTiempo(urlNubeMusicas(id), opciones);
   }
 
   async function enviarAdorno(registro) {
@@ -1472,7 +2220,7 @@ import * as THREE from 'three';
       });
       if (!respuesta.ok) throw new Error('HTTP ' + respuesta.status);
       quitarPendiente(registro.id);
-      estadoNube('Nube al dia', 'nube');
+      estadoNube('Nube al dia · ' + adornosColocados.length + ' adornos', 'nube');
       return true;
     } catch (error) {
       estadoNube('Sin conexion · local', 'error');
@@ -1518,7 +2266,7 @@ import * as THREE from 'three';
       });
       if (cambios) guardarLocal();
       const pendientesOk = await subirPendientes();
-      if (pendientesOk) estadoNube('Nube al dia', 'nube');
+      if (pendientesOk) estadoNube('Nube al dia · ' + adornosColocados.length + ' adornos', 'nube');
       return pendientesOk;
     } catch (error) {
       estadoNube('Sin conexion · local', 'error');
@@ -1560,8 +2308,21 @@ import * as THREE from 'three';
     }
     reiniciarCopos();
     iniciarBucles();
+    if (!musicas.length) {
+      leerMusicasLocal();
+      if (musicas.length !== MUSICAS_DEFECTO.length) renderizarMusicas();
+    }
+    const guardada = parseInt(leerAlmacen(CLAVE_MUSICA_SEL) || '-1', 10);
+    musicaIndice = guardada >= 0 && guardada < musicas.length ? guardada : -1;
+    renderizarMusicas();
     estadoNube('Conectando nube', 'guardando');
     void sincronizarNube();
+    void cargarMusicasNube();
+    if (!intervaloNube) {
+      intervaloNube = setInterval(() => {
+        if (activo && !document.hidden) void sincronizarNube();
+      }, 30000);
+    }
   }
 
   function detener() {
@@ -1574,6 +2335,14 @@ import * as THREE from 'three';
     escenaEl.classList.remove('sobre');
     clearTimeout(avisoTimeout);
     avisoEl.classList.remove('visible');
+    audioMusica.pause();
+    menuEl.classList.remove('abierto');
+    munecoHitEl.setAttribute('aria-expanded', 'false');
+    cerrarPaneles();
+    if (intervaloNube) {
+      clearInterval(intervaloNube);
+      intervaloNube = null;
+    }
 
     if (arrastre) {
       quitarEscuchasArrastre();
