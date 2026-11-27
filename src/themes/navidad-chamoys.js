@@ -1586,6 +1586,7 @@ import * as THREE from 'three';
     const posicionesPorColor = COLORES_LUCES.map(() => []);
     const capas = [];
     const tramos = [
+      { inicio: 0.02, fin: 0.40, vueltas: 2.2, desfase: 1.0, cantidad: 90 },
       { inicio: 0.07, fin: 0.93, vueltas: 3.6, desfase: 0.15, cantidad: 88 },
       { inicio: 0.11, fin: 0.89, vueltas: 3.1, desfase: 2.30, cantidad: 80 },
       { inicio: 0.16, fin: 0.85, vueltas: 2.7, desfase: 4.20, cantidad: 72 }
