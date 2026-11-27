@@ -106,7 +106,7 @@ import * as THREE from 'three';
     pina: ['#c98a4b', '#ffcf7a', '#6bffb8', '#8ffcff'],
     vela: ['#ffe3a3', '#ff9ad5', '#8ffcff', '#ffcf7a']
   };
-  const COLORES_LUCES = [0xff2e2e, 0x2eff7a, 0x2e8eff, 0x2ad0ff, 0x2af0ff, 0x6bffb8];
+  const COLORES_LUCES = [0xffd700, 0xffcf7a, 0xff2e2e, 0x2eff7a, 0x2e8eff, 0x2ad0ff];
 
   const ICONOS = {
     bola: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 5.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8.6 13c.2-2 1.5-3.4 3.4-3.7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" opacity=".75"/></svg>',
@@ -1786,13 +1786,13 @@ import * as THREE from 'three';
     const geoLuces = new THREE.BufferGeometry();
     geoLuces.setAttribute('position', new THREE.Float32BufferAttribute(posicionesLuces, 3));
     lucesCalidas = new THREE.Points(geoLuces, new THREE.PointsMaterial({
-      color: PALETA.hielo, map: texturaPunto, size: 0.26, sizeAttenuation: true,
-      transparent: true, opacity: 1, blending: THREE.AdditiveBlending,
+      color: 0xffe6b8, map: texturaPunto, size: 0.15, sizeAttenuation: true,
+      transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending,
       depthWrite: false, alphaTest: 0.02
     }));
     lucesCalidas.renderOrder = 6;
-    lucesCalidas.material.opacity = 0.9;
-    lucesCalidas.material.size = 0.09;
+    lucesCalidas.material.opacity = 0.4;
+    lucesCalidas.material.size = 0.15;
     lucesCalidas.material.alphaTest = 0.02;
     grupo.add(lucesCalidas);
 
@@ -1946,14 +1946,6 @@ import * as THREE from 'three';
       brazo.rotation.z = lado * -1.02;
       brazo.rotation.y = lado * 0.28;
       grupo.add(brazo);
-      const rama = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.007, 0.13, 5), materialNieve);
-      rama.position.set(lado * 0.34, 0.735, 0.02);
-      rama.rotation.z = lado * -0.42;
-      grupo.add(rama);
-      const rama2 = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.006, 0.11, 5), materialNieve);
-      rama2.position.set(lado * 0.35, 0.62, 0.02);
-      rama2.rotation.z = lado * -1.55;
-      grupo.add(rama2);
     });
 
     grupo.position.set(MUNECO_BASE_X, MUNECO_BASE_Y, MUNECO_BASE_Z);
@@ -2647,8 +2639,8 @@ import * as THREE from 'three';
       }
     }
     if (luzGuirnalda) luzGuirnalda.intensity = 3.4 + Math.sin(ahora * 0.0021 + 1.3) * 1.0;
-    if (lucesCalidas) lucesCalidas.material.opacity = limitar(1 + Math.sin(ahora * 0.0016) * 0.02, 0.9, 1);
-    lucesCalidas.material.size = 0.3;
+    if (lucesCalidas) lucesCalidas.material.opacity = limitar(0.4 + Math.sin(ahora * 0.0016) * 0.06, 0.3, 0.55);
+    lucesCalidas.material.size = 0.15;
     if (materialConcha) materialConcha.uniforms.uTiempo.value = ahora * 0.001;
     actualizarAdornos(ahora);
     renderer.render(escena, camara);
