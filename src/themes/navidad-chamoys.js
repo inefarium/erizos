@@ -541,7 +541,6 @@ import * as THREE from 'three';
     <div class="navidad-escena">
       <canvas class="navidad-arbol-canvas"></canvas>
       <button class="navidad-muneco-hit" type="button" aria-label="Abrir opciones del muneco de nieve" aria-expanded="false" title="Toca el muneco de nieve para ver las opciones">
-        <span class="navidad-muneco-etiqueta">Opciones</span>
       </button>
     </div>
     <div class="navidad-muneco-menu" role="dialog" aria-label="Opciones del muneco de nieve">
@@ -1606,7 +1605,7 @@ import * as THREE from 'three';
       const cable = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(puntos),
         new THREE.LineBasicMaterial({
-          color: 0xffcf7a, transparent: true, opacity: 0.7,
+          color: 0xffcf7a, transparent: true, opacity: 0.55,
           blending: THREE.AdditiveBlending, depthWrite: false
         })
       );
@@ -1635,7 +1634,7 @@ import * as THREE from 'three';
       const material = new THREE.PointsMaterial({
         color: colores[indice],
         map: texturaPunto,
-        size: indice % 2 === 0 ? 0.26 : 0.24,
+        size: indice % 2 === 0 ? 0.22 : 0.20,
         sizeAttenuation: true,
         transparent: true,
         opacity: 1,
@@ -1685,8 +1684,8 @@ import * as THREE from 'three';
     geometria.setAttribute('position', new THREE.Float32BufferAttribute(posiciones, 3));
     geometria.setAttribute('color', new THREE.Float32BufferAttribute(colores, 3));
     const aura = new THREE.Points(geometria, new THREE.PointsMaterial({
-      map: texturaPunto, size: 0.7, sizeAttenuation: true, vertexColors: true,
-      transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending,
+      map: texturaPunto, size: 0.55, sizeAttenuation: true, vertexColors: true,
+      transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending,
       depthWrite: false, alphaTest: 0.02
     }));
     aura.name = 'aura-arbol';
@@ -1787,7 +1786,7 @@ import * as THREE from 'three';
     const geoLuces = new THREE.BufferGeometry();
     geoLuces.setAttribute('position', new THREE.Float32BufferAttribute(posicionesLuces, 3));
     lucesCalidas = new THREE.Points(geoLuces, new THREE.PointsMaterial({
-      color: PALETA.hielo, map: texturaPunto, size: 0.22, sizeAttenuation: true,
+      color: PALETA.hielo, map: texturaPunto, size: 0.26, sizeAttenuation: true,
       transparent: true, opacity: 1, blending: THREE.AdditiveBlending,
       depthWrite: false, alphaTest: 0.02
     }));
@@ -1891,7 +1890,6 @@ import * as THREE from 'three';
       const geo = new THREE.SphereGeometry(radio, 22, 16);
       const malla = new THREE.Mesh(geo, materialNieve);
       malla.position.y = y;
-      malla.add(crearLineasMalla(geo, 0xdffbff, 0.45));
       return malla;
     }
 
@@ -2655,9 +2653,9 @@ import * as THREE from 'three';
       grupoAuraArbol.material.opacity = limitar(0.85 + Math.sin(ahora * 0.0009 + 0.8) * 0.12, 0.6, 1);
       grupoAuraArbol.rotation.y -= dt * 0.012;
     }
-    if (luzGuirnalda) luzGuirnalda.intensity = 22 + Math.sin(ahora * 0.0021 + 1.3) * 4;
+    if (luzGuirnalda) luzGuirnalda.intensity = 28 + Math.sin(ahora * 0.0021 + 1.3) * 6;
     if (lucesCalidas) lucesCalidas.material.opacity = limitar(1 + Math.sin(ahora * 0.0016) * 0.02, 0.9, 1);
-    lucesCalidas.material.size = 0.22;
+    lucesCalidas.material.size = 0.3;
     if (materialConcha) materialConcha.uniforms.uTiempo.value = ahora * 0.001;
     actualizarAdornos(ahora);
     renderer.render(escena, camara);
