@@ -106,7 +106,7 @@ import * as THREE from 'three';
     pina: ['#c98a4b', '#ffcf7a', '#6bffb8', '#8ffcff'],
     vela: ['#ffe3a3', '#ff9ad5', '#8ffcff', '#ffcf7a']
   };
-  const COLORES_LUCES = [0xffcf7a, 0xffa54d, 0xff5f9a, 0x8ffcff, 0x6bffb8, 0x00f0ff];
+  const COLORES_LUCES = [0xff2e2e, 0x2eff7a, 0x2e8eff, 0x2ad0ff, 0x2af0ff, 0x6bffb8];
 
   const ICONOS = {
     bola: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M9.5 5.5h5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8.6 13c.2-2 1.5-3.4 3.4-3.7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" opacity=".75"/></svg>',
@@ -1799,9 +1799,6 @@ import * as THREE from 'three';
     grupoGuirnalda = construirGuirnaldaNavidad();
     grupo.add(grupoGuirnalda);
 
-    grupoAuraArbol = construirAuraNavidad();
-    grupo.add(grupoAuraArbol);
-
     luzGuirnalda = new THREE.PointLight(0xffb86a, 3.4, 5.2, 2);
     luzGuirnalda.position.set(0, 0.12, 0.82);
     grupo.add(luzGuirnalda);
@@ -2649,11 +2646,7 @@ import * as THREE from 'three';
         );
       }
     }
-    if (grupoAuraArbol) {
-      grupoAuraArbol.material.opacity = limitar(0.85 + Math.sin(ahora * 0.0009 + 0.8) * 0.12, 0.6, 1);
-      grupoAuraArbol.rotation.y -= dt * 0.012;
-    }
-    if (luzGuirnalda) luzGuirnalda.intensity = 28 + Math.sin(ahora * 0.0021 + 1.3) * 6;
+    if (luzGuirnalda) luzGuirnalda.intensity = 3.4 + Math.sin(ahora * 0.0021 + 1.3) * 1.0;
     if (lucesCalidas) lucesCalidas.material.opacity = limitar(1 + Math.sin(ahora * 0.0016) * 0.02, 0.9, 1);
     lucesCalidas.material.size = 0.3;
     if (materialConcha) materialConcha.uniforms.uTiempo.value = ahora * 0.001;
