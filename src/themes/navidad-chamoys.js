@@ -867,6 +867,8 @@ import * as THREE from 'three';
     if (!Array.isArray(datos)) return;
     datos.forEach((valor) => {
       if (!valor || typeof valor !== 'object') return;
+      const nombre = String(valor.nombre || 'Musica').slice(0, 80);
+      if (/Last Christmas|Spotidownloader|Wham/i.test(nombre)) return;
       const data = typeof valor.data === 'string' ? valor.data : '';
       const dataValida = data.startsWith('data:audio') || /^https?:/i.test(data);
       const partes = Math.max(0, Math.floor(Number(valor.partes) || 0));
@@ -1016,6 +1018,8 @@ import * as THREE from 'three';
     const dataValida = data.startsWith('data:audio') || /^https?:/i.test(data);
     const partes = Math.max(0, Math.floor(Number(valor.partes) || 0));
     if (!dataValida && !partes) return false;
+    const nombreNube = String(valor.nombre || 'Musica').slice(0, 80);
+    if (/Last Christmas|Spotidownloader|Wham/i.test(nombreNube)) return false;
     const id = String(valor.id || '').trim() || nuevoId();
     const existente = musicas.find((pista) => pista.id === id);
     if (existente) {
@@ -1025,7 +1029,7 @@ import * as THREE from 'three';
     }
     musicas.push({
       id: id,
-      nombre: String(valor.nombre || 'Musica').slice(0, 80),
+      nombre: nombreNube,
       data: dataValida ? data : undefined,
       partes: partes,
       mime: typeof valor.mime === 'string' ? valor.mime : '',
@@ -1602,7 +1606,7 @@ import * as THREE from 'three';
       const cable = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(puntos),
         new THREE.LineBasicMaterial({
-          color: 0xd9a05a, transparent: true, opacity: 0.38,
+          color: 0xffcf7a, transparent: true, opacity: 0.6,
           blending: THREE.AdditiveBlending, depthWrite: false
         })
       );
@@ -1631,7 +1635,7 @@ import * as THREE from 'three';
       const material = new THREE.PointsMaterial({
         color: colores[indice],
         map: texturaPunto,
-        size: indice % 2 === 0 ? 0.14 : 0.12,
+        size: indice % 2 === 0 ? 0.22 : 0.19,
         sizeAttenuation: true,
         transparent: true,
         opacity: 1,
@@ -1646,8 +1650,10 @@ import * as THREE from 'three';
         material: material,
         fase: azar(0, TAU),
         velocidad: azar(0.0008, 0.0017),
-        base: azar(0.8, 0.94),
-        amplitud: azar(0.12, 0.22)
+        base: azar(0.88, 0.98),
+        amplitud: azar(0.10, 0.18),
+        parpadeoUmbral: azar(0.82, 0.97),
+        parpadeoVentana: azar(0.015, 0.05)
       });
     });
 
@@ -1679,8 +1685,8 @@ import * as THREE from 'three';
     geometria.setAttribute('position', new THREE.Float32BufferAttribute(posiciones, 3));
     geometria.setAttribute('color', new THREE.Float32BufferAttribute(colores, 3));
     const aura = new THREE.Points(geometria, new THREE.PointsMaterial({
-      map: texturaPunto, size: 0.24, sizeAttenuation: true, vertexColors: true,
-      transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending,
+      map: texturaPunto, size: 0.34, sizeAttenuation: true, vertexColors: true,
+      transparent: true, opacity: 0.65, blending: THREE.AdditiveBlending,
       depthWrite: false, alphaTest: 0.02
     }));
     aura.name = 'aura-arbol';
@@ -1781,8 +1787,8 @@ import * as THREE from 'three';
     const geoLuces = new THREE.BufferGeometry();
     geoLuces.setAttribute('position', new THREE.Float32BufferAttribute(posicionesLuces, 3));
     lucesCalidas = new THREE.Points(geoLuces, new THREE.PointsMaterial({
-      color: PALETA.hielo, map: texturaPunto, size: 0.062, sizeAttenuation: true,
-      transparent: true, opacity: 0.88, blending: THREE.AdditiveBlending,
+      color: PALETA.hielo, map: texturaPunto, size: 0.14, sizeAttenuation: true,
+      transparent: true, opacity: 1, blending: THREE.AdditiveBlending,
       depthWrite: false, alphaTest: 0.02
     }));
     lucesCalidas.renderOrder = 6;
@@ -2637,9 +2643,11 @@ import * as THREE from 'three';
       const capas = grupoGuirnalda.userData.capas || [];
       for (let i = 0; i < capas.length; i++) {
         const capa = capas[i];
+        const ciclo = (ahora * 0.001 + capa.fase) % 1;
+        const parpadeo = Math.abs(ciclo - capa.parpadeoUmbral) < capa.parpadeoVentana ? 0.25 : 1;
         capa.material.opacity = limitar(
-          capa.base + Math.sin(ahora * capa.velocidad + capa.fase) * capa.amplitud,
-          0.18, 1
+          capa.base * parpadeo + Math.sin(ahora * capa.velocidad + capa.fase) * capa.amplitud,
+          0.15, 1
         );
       }
     }
@@ -2647,9 +2655,9 @@ import * as THREE from 'three';
       grupoAuraArbol.material.opacity = 0.13 + Math.sin(ahora * 0.0009 + 0.8) * 0.045;
       grupoAuraArbol.rotation.y -= dt * 0.012;
     }
-    if (luzGuirnalda) luzGuirnalda.intensity = 6 + Math.sin(ahora * 0.0021 + 1.3) * 1.2;
-    if (lucesCalidas) lucesCalidas.material.opacity = limitar(0.95 + Math.sin(ahora * 0.0016) * 0.06, 0.6, 1);
-    lucesCalidas.material.size = 0.11;
+    if (luzGuirnalda) luzGuirnalda.intensity = 12 + Math.sin(ahora * 0.0021 + 1.3) * 2;
+    if (lucesCalidas) lucesCalidas.material.opacity = limitar(1 + Math.sin(ahora * 0.0016) * 0.05, 0.85, 1);
+    lucesCalidas.material.size = 0.15;
     if (materialConcha) materialConcha.uniforms.uTiempo.value = ahora * 0.001;
     actualizarAdornos(ahora);
     renderer.render(escena, camara);
